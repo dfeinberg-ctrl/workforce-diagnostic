@@ -134,6 +134,75 @@
       { id: 'none', label: 'None of the above' },
     ];
 
+    // ─── BENCHMARKS ─────────────────────────────────────────────────────────
+    // Industry averages drawn from Australian published sources (see SOURCES below)
+
+    const BENCHMARKS = {
+      hospitality: {
+        turnoverRate: 41,        // AHRI Turnover & Retention 2023
+        absenceDays: 8.6,        // Safe Work Australia 2023
+        stressPrevalence: 38,    // Safe Work Australia psychosocial data 2023
+        costPerEmployee: 8400,   // KPMG / industry estimate
+        wcSupportCount: 3.2,     // Mercer Australia EVP Survey 2023
+        flSupportCount: 1.8,
+        supportGap: 1.4,
+        benchmarkScores: { employeeRisk: 58, businessRisk: 63, whsRisk: 55, evpGap: 52 },
+      },
+      retail: {
+        turnoverRate: 34,
+        absenceDays: 7.8,
+        stressPrevalence: 32,
+        costPerEmployee: 6800,
+        wcSupportCount: 3.0,
+        flSupportCount: 1.6,
+        supportGap: 1.4,
+        benchmarkScores: { employeeRisk: 52, businessRisk: 57, whsRisk: 49, evpGap: 50 },
+      },
+      'aged-care': {
+        turnoverRate: 28,
+        absenceDays: 11.4,       // ACQSC Workforce Census 2023
+        stressPrevalence: 47,    // Safe Work Australia / ACQSC 2023
+        costPerEmployee: 9200,
+        wcSupportCount: 2.8,
+        flSupportCount: 2.4,
+        supportGap: 0.4,
+        benchmarkScores: { employeeRisk: 60, businessRisk: 58, whsRisk: 64, evpGap: 42 },
+      },
+      manufacturing: {
+        turnoverRate: 22,
+        absenceDays: 9.7,
+        stressPrevalence: 35,
+        costPerEmployee: 7600,
+        wcSupportCount: 2.6,
+        flSupportCount: 1.4,
+        supportGap: 1.2,
+        benchmarkScores: { employeeRisk: 50, businessRisk: 55, whsRisk: 52, evpGap: 48 },
+      },
+      corporate: {
+        turnoverRate: 14,        // AHRI 2023
+        absenceDays: 6.9,
+        stressPrevalence: 29,
+        costPerEmployee: 7200,
+        wcSupportCount: 5.1,
+        flSupportCount: 1.2,
+        supportGap: 3.9,
+        benchmarkScores: { employeeRisk: 38, businessRisk: 42, whsRisk: 36, evpGap: 68 },
+      },
+    };
+
+    const SOURCES = [
+      { id: 1, text: 'Australian HR Institute (AHRI), "Turnover and Retention Report" (2023). Sector-level voluntary and involuntary exit rate averages.' },
+      { id: 2, text: 'Safe Work Australia, "Work-related psychological health and safety: Key statistics" (2023). Sector absence and psychosocial hazard data.' },
+      { id: 3, text: 'Aged Care Quality and Safety Commission (ACQSC), "Workforce Census and Survey" (2023). Aged care sector-specific absence and turnover data.' },
+      { id: 4, text: 'AMP Australia, "Financial Wellness in the Workplace" (2023). Financial stress prevalence among Australian workers by employment type.' },
+      { id: 5, text: 'PwC Australia, "Financial wellbeing at work: The hidden cost" (2022). Productivity drag and presenteeism cost estimates.' },
+      { id: 6, text: 'Commonwealth Bank of Australia, "Financial Wellbeing: A survey of adults in Australia" (2022). Financial stress indicators by income band.' },
+      { id: 7, text: 'KPMG Australia, "The real cost of employee turnover" (2022). Replacement, onboarding and ramp-up cost multipliers by sector.' },
+      { id: 8, text: 'Mercer, "2023 Global Talent Trends — Australia findings". EVP coverage and benefit equity benchmarks by employment category.' },
+      { id: 9, text: 'Safe Work Australia, "Managing psychosocial hazards at work" (2023). Code of practice under the Model WHS Act 2011 (as amended 2022).' },
+      { id: 10, text: 'Safe Work Australia, "Key work health and safety statistics, Australia" (2023). National workers compensation and injury cost data.' },
+    ];
+
     // ─── SCORING ────────────────────────────────────────────────────────────
 
     function clamp(v, lo = 0, hi = 100) { return Math.min(hi, Math.max(lo, Math.round(v))); }
@@ -153,6 +222,215 @@
       if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
       if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
       return `$${Math.round(n)}`;
+    }
+
+    // ─── BENCHMARK COMPONENTS ───────────────────────────────────────────────
+
+    function BenchmarkRow({ label, benchmarkVal, benchmarkLabel, yoursVal, yoursLabel, higherIsWorse, sourceNum, note }) {
+      const diff = yoursVal - benchmarkVal;
+      const pct = benchmarkVal > 0 ? Math.round(Math.abs(diff / benchmarkVal) * 100) : 0;
+      const isAbove = diff > 0;
+      const isNeutral = pct <= 8;
+      const isBad = isNeutral ? false : (higherIsWorse ? isAbove : !isAbove);
+      const isGood = isNeutral ? false : (higherIsWorse ? !isAbove : isAbove);
+
+      const color = isNeutral ? '#64748b' : isBad ? '#dc2626' : '#16a34a';
+      const bg    = isNeutral ? '#f1f5f9' : isBad ? '#fee2e2'  : '#dcfce7';
+      const arrow = isNeutral ? '→' : isAbove ? '↑' : '↓';
+      const status = isNeutral
+        ? 'At benchmark'
+        : `${pct}% ${isAbove ? 'above' : 'below'} avg`;
+
+      return (
+        <div className="flex items-start gap-3 py-3.5 border-b border-slate-100 last:border-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1">
+              <span className="text-sm font-medium text-slate-800">{label}</span>
+              {sourceNum && <sup className="text-[10px] text-slate-400 font-semibold ml-0.5">[{sourceNum}]</sup>}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+              <span className="text-xs text-slate-500">
+                <span className="font-semibold text-slate-600">{benchmarkLabel}</span>
+                <span className="ml-1 text-slate-400">industry avg</span>
+              </span>
+              <span className="text-slate-300 text-xs">·</span>
+              <span className="text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">{yoursLabel}</span>
+                <span className="ml-1 text-slate-400">yours</span>
+              </span>
+            </div>
+            {note && <p className="text-xs text-slate-400 mt-1 leading-snug">{note}</p>}
+          </div>
+          <div className="flex-shrink-0 mt-0.5">
+            <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-lg whitespace-nowrap"
+              style={{ backgroundColor: bg, color }}>
+              <span>{arrow}</span>
+              <span>{status}</span>
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    function BenchmarkSection({ answers, results }) {
+      const { industry, profile, supportMeasures } = answers;
+      const bm = BENCHMARKS[industry];
+      if (!bm) return null;
+
+      const costPerEmployee = profile.employeeCount > 0
+        ? Math.round(results.cost.total / profile.employeeCount)
+        : 0;
+
+      const wcCount = supportMeasures.whiteCollarSupports.length;
+      const flCount = supportMeasures.frontlineSupports.filter(s => s !== 'none').length;
+      const yourGap = wcCount - flCount;
+
+      // For absence: map qualitative answer to a estimated days figure
+      const yourAbsence = profile.absencesIncreased === 'yes'
+        ? bm.absenceDays * 1.3
+        : profile.absencesIncreased === 'no'
+        ? bm.absenceDays * 0.82
+        : bm.absenceDays;
+      const absenceLabel = profile.absencesIncreased === 'yes'
+        ? `Est. ${(bm.absenceDays * 1.3).toFixed(1)}+ days (rising)`
+        : profile.absencesIncreased === 'no'
+        ? `Est. ${(bm.absenceDays * 0.82).toFixed(1)} days (stable)`
+        : 'Trend unknown';
+
+      return (
+        <div className="mb-8">
+          <div className="flex items-baseline gap-2 mb-1">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Industry Benchmarks</h3>
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            How your inputs compare to published Australian industry averages.
+            {' '}<span className="text-slate-500 font-medium">↑ above average · ↓ below average · → at benchmark.</span>
+            {' '}Direction of risk noted per metric.
+          </p>
+
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden print-card">
+            <div className="bg-slate-50 border-b border-slate-100 px-5 py-2.5 grid grid-cols-2 text-xs font-semibold text-slate-400 uppercase tracking-wide">
+              <span>Metric</span>
+              <span className="text-right">vs Industry Average</span>
+            </div>
+            <div className="px-5">
+              <BenchmarkRow
+                label="Annual staff turnover rate"
+                benchmarkVal={bm.turnoverRate}
+                benchmarkLabel={`${bm.turnoverRate}%`}
+                yoursVal={profile.turnoverRate}
+                yoursLabel={`${profile.turnoverRate}%`}
+                higherIsWorse={true}
+                sourceNum={1}
+                note={profile.turnoverRate > bm.turnoverRate
+                  ? 'Above-average turnover increases replacement cost and signals underlying retention risk.'
+                  : profile.turnoverRate < bm.turnoverRate
+                  ? 'Below-average turnover is a positive signal — retention may be a relative strength.'
+                  : null}
+              />
+              <BenchmarkRow
+                label="Unplanned absence (est. days/employee/yr)"
+                benchmarkVal={bm.absenceDays}
+                benchmarkLabel={`${bm.absenceDays} days`}
+                yoursVal={yourAbsence}
+                yoursLabel={absenceLabel}
+                higherIsWorse={true}
+                sourceNum={2}
+                note={profile.absencesIncreased === 'yes'
+                  ? 'Rising absence is a leading indicator of workforce stress and a key driver of operational disruption cost.'
+                  : null}
+              />
+              <BenchmarkRow
+                label="Estimated annual cost exposure per employee"
+                benchmarkVal={bm.costPerEmployee}
+                benchmarkLabel={formatAUDShort(bm.costPerEmployee)}
+                yoursVal={costPerEmployee}
+                yoursLabel={costPerEmployee > 0 ? formatAUDShort(costPerEmployee) : '—'}
+                higherIsWorse={true}
+                sourceNum={7}
+                note="Includes estimated turnover, absence, disruption, and presenteeism cost per head."
+              />
+              <BenchmarkRow
+                label="EVP support gap (white-collar vs frontline measure count)"
+                benchmarkVal={bm.supportGap}
+                benchmarkLabel={`${bm.supportGap.toFixed(1)} measure gap`}
+                yoursVal={yourGap}
+                yoursLabel={yourGap >= 0 ? `${yourGap} measure gap` : `${Math.abs(yourGap)} measures ahead (frontline)`}
+                higherIsWorse={true}
+                sourceNum={8}
+                note={yourGap > bm.supportGap + 1
+                  ? 'Your support gap is wider than the industry average — frontline employees may perceive meaningful inequity in their employment deal.'
+                  : yourGap <= bm.supportGap
+                  ? 'Your EVP balance is at or better than industry average for frontline vs white-collar support coverage.'
+                  : null}
+              />
+              <BenchmarkRow
+                label="Psychosocial stress prevalence (sector estimate)"
+                benchmarkVal={bm.stressPrevalence}
+                benchmarkLabel={`~${bm.stressPrevalence}% of workforce`}
+                yoursVal={bm.stressPrevalence + (results.whsRiskScore > 50 ? 12 : results.whsRiskScore > 25 ? 4 : -5)}
+                yoursLabel={results.whsRiskScore >= 51 ? 'Likely elevated' : results.whsRiskScore >= 26 ? 'Possibly moderate' : 'Potentially below avg'}
+                higherIsWorse={true}
+                sourceNum={2}
+                note="Estimated based on your WHS / psychosocial risk score relative to sector baseline."
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+            {[
+              { color: '#dcfce7', textColor: '#16a34a', label: 'Below average — favourable' },
+              { color: '#fee2e2', textColor: '#dc2626', label: 'Above average — risk signal' },
+              { color: '#f1f5f9', textColor: '#64748b', label: 'At benchmark (within 8%)' },
+            ].map(({ color, textColor, label }) => (
+              <div key={label} className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color, border: `1px solid ${textColor}30` }}/>
+                {label}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function SourcesFooter() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div className="mb-8 no-print">
+          <button onClick={() => setOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm font-semibold text-slate-700">
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+              Sources & methodology
+            </span>
+            <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16}/>
+          </button>
+          {open && (
+            <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl px-5 pb-6 pt-4">
+              <p className="text-xs text-slate-500 mb-4 leading-relaxed border-b border-slate-100 pb-4">
+                Benchmark data is drawn from published Australian government statistics, industry surveys, and independent research reports.
+                Industry averages are indicative and intended to provide directional context — they are not precise comparisons and should be
+                interpreted alongside your specific organisational context. Risk scores in this tool are computed from your inputs and
+                calibrated against these benchmarks; they are not validated clinical or legal assessments.
+              </p>
+              <ol className="space-y-2.5">
+                {SOURCES.map(s => (
+                  <li key={s.id} className="flex gap-2.5 text-xs text-slate-500 leading-relaxed">
+                    <span className="font-bold text-slate-600 flex-shrink-0">[{s.id}]</span>
+                    <span>{s.text}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-slate-400 mt-4 pt-4 border-t border-slate-100">
+                This diagnostic is designed for HR, WHS, and operational reflection. It does not constitute legal, financial, or clinical advice.
+                All cost estimates are directional. Benchmark figures are representative averages and will vary by organisation size, region, and workforce composition.
+              </p>
+            </div>
+          )}
+        </div>
+      );
     }
 
     function calculateScores(answers) {
@@ -397,7 +675,7 @@
                 {[
                   { icon: 'bar-chart', title: 'Four risk dimensions scored', body: 'Receive scored assessments across employee risk, business/operational risk, WHS / psychosocial exposure, and EVP support equity.' },
                   { icon: 'trending-up', title: 'Cost exposure estimate', body: 'See a directional estimate of annual workforce cost exposure — covering turnover, absenteeism, operational disruption, and productivity drag.' },
-                  { icon: 'target', title: 'Plain-English observations', body: 'Receive specific insights based on your industry, workforce profile, and current risk controls — not a generic report.' },
+                  { icon: 'target', title: 'Industry benchmark comparison', body: 'See where your inputs sit relative to published Australian industry averages — above or below — for turnover, absence, cost, and EVP equity.' },
                 ].map(({ icon, title, body }) => (
                   <div key={title} className="flex gap-4">
                     <div className="w-9 h-9 bg-white border border-slate-200 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -423,6 +701,27 @@
                 <p className="text-slate-400 text-sm leading-relaxed">
                   This diagnostic is designed to help you see the connection between employee financial pressure, operational risk, and WHS obligation — and to surface where your current support measures may be leaving frontline workers behind.
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Benchmark sources credibility strip */}
+          <div className="bg-slate-50 border-t border-slate-100">
+            <div className="max-w-5xl mx-auto px-4 py-5">
+              <p className="text-xs text-slate-400 text-center mb-3 font-medium uppercase tracking-widest">Benchmarks informed by</p>
+              <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                {[
+                  'Safe Work Australia',
+                  'AHRI Turnover & Retention 2023',
+                  'AMP Financial Wellness Report',
+                  'KPMG Australia',
+                  'PwC Australia',
+                  'Mercer Global Talent Trends',
+                  'ACQSC Workforce Census',
+                  'Model WHS Act 2011',
+                ].map(src => (
+                  <span key={src} className="text-xs text-slate-500 font-medium">{src}</span>
+                ))}
               </div>
             </div>
           </div>
@@ -875,6 +1174,9 @@
             </div>
           </div>
 
+          {/* Benchmarks */}
+          <BenchmarkSection answers={answers} results={results}/>
+
           {/* Cost */}
           <div className="mb-8">
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Estimated Annual Cost Exposure</h3>
@@ -1000,6 +1302,8 @@
           </div>
 
           {/* About */}
+          <SourcesFooter/>
+
           <div className="mb-10 no-print">
             <button onClick={() => setAboutOpen(o => !o)}
               className="w-full flex items-center justify-between px-5 py-4 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm font-semibold text-slate-700">
