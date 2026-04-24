@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workforce Risk & WHS Diagnostic</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #e2e8f0; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #2563eb; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #2563eb; cursor: pointer; border: none; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; }
+      .print-card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+    }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useRef } = React;
+
+    // ─── DATA ───────────────────────────────────────────────────────────────
+
+    const INDUSTRIES = [
+      {
+        id: 'hospitality', label: 'Hospitality', emoji: '🍽️',
+        description: 'Hotels, restaurants, venues, and food service',
+        riskContext: 'High rostering sensitivity · elevated turnover · strong frontline dependency',
+        multipliers: { turnover: 0.45, absence: 1.25, disruption: 1.35, productivity: 0.85 },
+        scenario: 'Frontline teams facing variable rosters and unexpected expenses may create rostering pressure, higher absenteeism, and manager strain. Financial stress among hospitality workers often surfaces in last-minute no-shows, avoidable turnover, and operational gaps that cascade across shifts. The compounding effect of tight margins and high roster dependency means that individual employee stress translates quickly into business-level disruption.',
+      },
+      {
+        id: 'retail', label: 'Retail', emoji: '🏬',
+        description: 'Stores, supermarkets, and customer-facing retail',
+        riskContext: 'Volume dependency · customer impact · presenteeism and engagement risk',
+        multipliers: { turnover: 0.40, absence: 1.15, disruption: 1.20, productivity: 0.90 },
+        scenario: 'High-volume customer-facing teams may absorb financial stress through disengagement, turnover, and inconsistent shift coverage. In retail, the pressure of financial strain often presents as reduced customer service quality, increased shrinkage risk, and difficulty maintaining rostered headcount. The link between frontline financial wellbeing and customer experience is direct and measurable.',
+      },
+      {
+        id: 'aged-care', label: 'Aged Care / Healthcare', emoji: '🏥',
+        description: 'Aged care, disability, and healthcare services',
+        riskContext: 'Duty of care · safety-critical environment · high regulatory exposure',
+        multipliers: { turnover: 0.52, absence: 1.35, disruption: 1.45, productivity: 1.10 },
+        scenario: 'In care environments, fatigue, distraction, and understaffing can quickly move from employee pressure to safety exposure. The regulatory and duty-of-care context means that psychosocial risk in aged care and healthcare has direct implications for resident or patient safety, compliance, and organisational liability. Workforce instability in this sector is not simply an HR issue — it is a clinical and governance risk.',
+      },
+      {
+        id: 'manufacturing', label: 'Manufacturing / Logistics', emoji: '🏭',
+        description: 'Manufacturing, warehousing, and supply chain',
+        riskContext: 'Physical safety risk · fatigue sensitivity · operational continuity dependency',
+        multipliers: { turnover: 0.40, absence: 1.20, disruption: 1.30, productivity: 1.05 },
+        scenario: 'Financial stress combined with fatigue and operational pressure may increase error risk, safety exposure, and replacement cost. In manufacturing and logistics environments, the combination of shift fatigue, financial distraction, and roster gaps creates measurable physical safety risk and compliance exposure. The cost of a single preventable incident typically exceeds the annual investment required to address its root causes.',
+      },
+      {
+        id: 'corporate', label: 'Professional Services / Corporate', emoji: '🏢',
+        description: 'Office-based professional and corporate environments',
+        riskContext: 'Presenteeism · talent retention · knowledge worker productivity loss',
+        multipliers: { turnover: 0.35, absence: 0.90, disruption: 0.90, productivity: 1.25 },
+        scenario: 'In office-based settings, the signals may show up less in shift coverage and more in presenteeism, disengagement, and regrettable attrition. Financial stress in corporate environments often presents as reduced cognitive performance, increased decision fatigue, quiet quitting, and higher-than-expected voluntary turnover among key talent. The cost is real, but harder to see — which makes it easier to underestimate.',
+      },
+    ];
+
+    const EMPLOYEE_SIGNALS = [
+      { id: 'pay-advances', label: 'Employees request pay advances' },
+      { id: 'financial-distraction', label: 'Employees appear distracted due to personal financial issues' },
+      { id: 'extra-shifts', label: 'Team members regularly pick up extra shifts unexpectedly' },
+      { id: 'small-pay-diff', label: 'Staff leave for relatively small pay differences' },
+      { id: 'pay-cycle-struggle', label: 'Employees struggle between pay cycles' },
+      { id: 'informal-money-stress', label: 'Managers hear about money stress informally' },
+      { id: 'hr-financial-requests', label: 'Payroll or HR fields ad hoc financial support requests' },
+      { id: 'absence-financial-link', label: 'Staff absenteeism appears linked to personal or financial pressure' },
+    ];
+
+    const OPERATIONAL_SIGNALS = [
+      { id: 'last-minute-replacements', label: 'Frequent last-minute shift replacements' },
+      { id: 'manager-gap-cover', label: 'Managers covering operational gaps' },
+      { id: 'increased-overtime', label: 'Increased overtime spend' },
+      { id: 'rostering-instability', label: 'Rostering instability' },
+      { id: 'productivity-dips', label: 'Productivity dips' },
+      { id: 'disengagement', label: 'More disengagement' },
+      { id: 'avoidable-turnover', label: 'Higher avoidable turnover' },
+      { id: 'safety-understaffing', label: 'Increased compliance / safety pressure from understaffing' },
+    ];
+
+    const WHS_SIGNALS = [
+      { id: 'fatigue-increasing', label: 'Fatigue appears to be increasing' },
+      { id: 'stress-behaviour', label: 'Stress-related behaviour is more noticeable' },
+      { id: 'team-leader-strain', label: 'Higher emotional strain on team leaders' },
+      { id: 'interpersonal-friction', label: 'More interpersonal friction' },
+      { id: 'distraction-errors', label: 'Increased risk of distraction-related mistakes' },
+      { id: 'pressure-period-risk', label: 'Greater risk during high-pressure periods' },
+      { id: 'inconsistent-assessment', label: 'Psychosocial hazards are not consistently assessed' },
+      { id: 'uneven-wellbeing', label: 'Workforce wellbeing support is uneven across employee groups' },
+    ];
+
+    const WC_SUPPORTS = [
+      { id: 'flexible-work', label: 'Flexible work arrangements' },
+      { id: 'bonus-incentive', label: 'Bonus / incentive structures' },
+      { id: 'salary-packaging', label: 'Salary packaging' },
+      { id: 'novated-leasing', label: 'Novated leasing' },
+      { id: 'additional-leave', label: 'Additional leave benefits' },
+      { id: 'wellness-allowance', label: 'Wellness allowance' },
+      { id: 'private-health', label: 'Private health support' },
+      { id: 'financial-education', label: 'Financial education' },
+    ];
+
+    const FL_SUPPORTS = [
+      { id: 'shift-flexibility', label: 'Shift flexibility' },
+      { id: 'meal-discounts', label: 'Meal discounts' },
+      { id: 'transport-support', label: 'Transport support' },
+      { id: 'emergency-hardship', label: 'Emergency hardship support' },
+      { id: 'eap', label: 'Employee Assistance Program (EAP)' },
+      { id: 'financial-wellbeing', label: 'Financial wellbeing resources' },
+      { id: 'pay-advance', label: 'Pay advance process' },
+      { id: 'earned-wage-access', label: 'Earned wage access' },
+      { id: 'manager-escalation', label: 'Manager escalation pathway for vulnerable staff' },
+      { id: 'none', label: 'None of the above' },
+    ];
+
+    // ─── SCORING ────────────────────────────────────────────────────────────
+
+    function clamp(v, lo = 0, hi = 100) { return Math.min(hi, Math.max(lo, Math.round(v))); }
+
+    function getRiskLevel(score) {
+      if (score <= 25) return { label: 'Low',      color: '#16a34a', bgColor: '#dcfce7' };
+      if (score <= 50) return { label: 'Moderate', color: '#d97706', bgColor: '#fef3c7' };
+      if (score <= 75) return { label: 'Elevated', color: '#ea580c', bgColor: '#ffedd5' };
+      return               { label: 'High',     color: '#dc2626', bgColor: '#fee2e2' };
+    }
+
+    function formatAUD(n) {
+      return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n);
+    }
+
+    function formatAUDShort(n) {
+      if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+      if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
+      return `$${Math.round(n)}`;
+    }
+
+    function calculateScores(answers) {
+      const { industry, profile, riskSignals, supportMeasures } = answers;
+      const ind = INDUSTRIES.find(i => i.id === industry);
+      const mult = ind?.multipliers ?? { turnover: 0.40, absence: 1.10, disruption: 1.10, productivity: 1.00 };
+
+      // Employee Risk
+      const empProfile =
+        (profile.frontlinePercentage / 100) * 15 +
+        (profile.payFrequency === 'monthly' ? 10 : profile.payFrequency === 'fortnightly' ? 5 : 2) +
+        (profile.absencesIncreased === 'yes' ? 10 : profile.absencesIncreased === 'unsure' ? 5 : 0) +
+        Math.min((profile.turnoverRate / 50) * 5, 5);
+      const empSig = (riskSignals.employeeSignals.length / 8) * 60;
+      const employeeRiskScore = clamp(empProfile + empSig);
+
+      // Business Risk
+      const bizProfile =
+        Math.min((profile.turnoverRate / 100) * 50, 20) +
+        (profile.frontlinePercentage / 100) * 10 +
+        (profile.absencesIncreased === 'yes' ? 5 : profile.absencesIncreased === 'unsure' ? 2 : 0);
+      const bizSig = (riskSignals.operationalSignals.length / 8) * 65;
+      const businessRiskScore = clamp(bizProfile + bizSig);
+
+      // WHS Risk
+      const whsProfile =
+        (profile.frontlinePercentage / 100) * 15 +
+        (profile.absencesIncreased === 'yes' ? 10 : profile.absencesIncreased === 'unsure' ? 5 : 0) +
+        Math.min((profile.turnoverRate / 50) * 5, 5);
+      const whsSig = (riskSignals.whsSignals.length / 8) * 70;
+      const whsRiskScore = clamp(whsProfile + whsSig);
+
+      // EVP Gap
+      const wcCount = supportMeasures.whiteCollarSupports.length;
+      const flActual = supportMeasures.frontlineSupports.filter(s => s !== 'none');
+      const flCount = flActual.length;
+      const hasNone = supportMeasures.frontlineSupports.includes('none');
+      let evpRaw = hasNone
+        ? 65 + (wcCount / 8) * 35
+        : Math.max(wcCount / 8 - flCount / 9, 0) * 55 +
+          (1 - flCount / 9) * 25 +
+          (profile.frontlinePercentage / 100) * 10 +
+          (wcCount > 0 && flCount === 0 ? 10 : 0);
+      const evpGapScore = clamp(evpRaw);
+
+      // Cost
+      const employees = Math.max(profile.employeeCount, 1);
+      const avgSalary = Math.max(profile.averageSalary, 1);
+      const flRatio = profile.frontlinePercentage / 100;
+
+      const turnoverCost = employees * (profile.turnoverRate / 100) * avgSalary * mult.turnover;
+      const absenceCost = employees * flRatio * (avgSalary / 260) * (employeeRiskScore / 100) * 8 * mult.absence;
+      const disruptionCost = employees * 2200 * mult.disruption * (businessRiskScore / 100);
+      const productivityCost = employees * avgSalary * (whsRiskScore / 100) * 0.028 * mult.productivity;
+      const total = turnoverCost + absenceCost + disruptionCost + productivityCost;
+
+      // Observations
+      const obs = [];
+      if (profile.frontlinePercentage >= 50)
+        obs.push(`Your workforce is predominantly frontline or shift-based (${profile.frontlinePercentage}%), which elevates psychosocial and operational risk exposure — particularly where financial flexibility and roster stability are limited.`);
+      if (profile.payFrequency === 'monthly' && profile.frontlinePercentage >= 30)
+        obs.push('Monthly pay cycles extend the financial vulnerability window for lower-income employees, increasing the risk of stress, absenteeism, and engagement erosion in the lead-up to pay day.');
+      if (profile.absencesIncreased === 'yes')
+        obs.push('Rising unplanned absences are a leading indicator of upstream workforce distress. Left unaddressed, this pattern typically translates to overtime spend, manager overextension, and cumulative operational cost.');
+      if (riskSignals.employeeSignals.length >= 5)
+        obs.push('Multiple financial stress signals are present simultaneously. This pattern typically reflects systemic employee pressure rather than isolated incidents — and suggests that existing support mechanisms may be insufficient or poorly understood.');
+      if (riskSignals.operationalSignals.length >= 4)
+        obs.push('Operational strain indicators suggest that workforce instability is already absorbing cost through overtime, manager gap-filling, and rostering disruption — often invisible in standard reporting until the cumulative impact becomes material.');
+      if (riskSignals.whsSignals.length >= 4)
+        obs.push('Multiple psychosocial risk indicators are present. Under Australian WHS legislation, organisations have a positive duty to manage psychosocial hazards — the pattern identified here warrants a structured risk assessment and documented control measures.');
+      if (evpGapScore >= 50 && wcCount > flCount + 2)
+        obs.push(`Support measures appear more aligned to office-based employees (${wcCount} measures) than to frontline or shift-based workers (${flCount} measures). This EVP gap may contribute to retention risk, reduced engagement, and a perception of inequality.`);
+      if (profile.turnoverRate >= 25 && obs.length < 3)
+        obs.push(`A turnover rate of ${profile.turnoverRate}% represents significant replacement cost and is likely a symptom of deeper workforce dissatisfaction — not simply a sector baseline.`);
+      if (riskSignals.whsSignals.includes('inconsistent-assessment') && obs.length < 5)
+        obs.push('Psychosocial hazards are not being consistently assessed across your organisation. This represents a compliance gap under the revised Model WHS Act and a missed opportunity to control emerging risk.');
+
+      return {
+        employeeRiskScore, businessRiskScore, whsRiskScore, evpGapScore,
+        cost: {
+          turnover: Math.round(turnoverCost),
+          absence: Math.round(absenceCost),
+          disruption: Math.round(disruptionCost),
+          productivity: Math.round(productivityCost),
+          total: Math.round(total),
+        },
+        observations: obs.slice(0, 5),
+      };
+    }
+
+    // ─── ICON COMPONENTS ────────────────────────────────────────────────────
+
+    function Icon({ name, size = 16, style = {} }) {
+      const paths = {
+        'arrow-right': <><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>,
+        'shield-check': <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></>,
+        'target': <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+        'users': <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+        'trending-up': <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+        'bar-chart': <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+        'chevron-right': <polyline points="9 18 15 12 9 6"/>,
+        'chevron-left': <polyline points="15 18 9 12 15 6"/>,
+        'chevron-down': <polyline points="6 9 12 15 18 9"/>,
+        'chevron-up': <polyline points="18 15 12 9 6 15"/>,
+        'alert-triangle': <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+        'check-circle': <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+        'printer': <><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>,
+        'rotate-ccw': <><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.28"/></>,
+        'send': <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+        'info': <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
+      };
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          {paths[name]}
+        </svg>
+      );
+    }
+
+    // ─── SCORE GAUGE ────────────────────────────────────────────────────────
+
+    function ScoreGauge({ score, label, sublabel }) {
+      const { color, bgColor, label: riskLabel } = getRiskLevel(score);
+      const cx = 80, cy = 85, r = 60;
+      const eff = Math.min(score, 99.9);
+      const angle = Math.PI * (1 - eff / 100);
+      const endX = cx + r * Math.cos(angle);
+      const endY = cy - r * Math.sin(angle);
+      const largeArc = score > 50 ? 1 : 0;
+
+      return (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col items-center print-card">
+          <svg width="160" height="105" viewBox="0 0 160 105">
+            <path d="M 20 85 A 60 60 0 0 1 140 85" fill="none" stroke="#e2e8f0" strokeWidth="10" strokeLinecap="round"/>
+            {score > 0 && (
+              <path
+                d={`M 20 85 A 60 60 0 ${largeArc} 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`}
+                fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
+              />
+            )}
+            <text x={cx} y={cy - 12} textAnchor="middle" fontSize="28" fontWeight="700" fill={color} fontFamily="Inter,sans-serif">{score}</text>
+            <text x={cx} y={cy + 7} textAnchor="middle" fontSize="10" fill="#94a3b8" fontFamily="Inter,sans-serif">out of 100</text>
+          </svg>
+          <div className="text-center mt-1">
+            <div className="text-sm font-semibold text-slate-800 leading-snug">{label}</div>
+            {sublabel && <div className="text-xs text-slate-500 mt-0.5 leading-snug">{sublabel}</div>}
+            <span className="inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mt-2"
+              style={{ backgroundColor: bgColor, color }}>{riskLabel}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── PROGRESS BAR ───────────────────────────────────────────────────────
+
+    const STEP_LABELS = ['Industry', 'Workforce Profile', 'Risk Signals', 'Support Measures', 'Results'];
+
+    function ProgressBar({ currentStep }) {
+      const pct = Math.round((currentStep / 5) * 100);
+      return (
+        <div className="w-full">
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Step {currentStep} of 5</span>
+              <span className="text-slate-300">·</span>
+              <span className="text-xs font-medium text-slate-600">{STEP_LABELS[currentStep - 1]}</span>
+            </div>
+            <span className="text-xs font-semibold text-blue-600">{pct}%</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out" style={{ width: `${pct}%` }}/>
+          </div>
+          <div className="flex justify-between mt-2.5">
+            {[1,2,3,4,5].map(s => (
+              <div key={s} className="flex flex-col items-center" style={{ width: '20%' }}>
+                <div className="w-2 h-2 rounded-full transition-colors duration-300"
+                  style={{ background: s < currentStep ? '#2563eb' : s === currentStep ? '#2563eb' : '#e2e8f0',
+                    outline: s === currentStep ? '3px solid #bfdbfe' : 'none' }}/>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── LANDING PAGE ───────────────────────────────────────────────────────
+
+    function LandingPage({ onStart }) {
+      return (
+        <div className="min-h-screen bg-white">
+          <div className="border-b border-slate-100 px-4 py-4">
+            <div className="max-w-5xl mx-auto flex items-center gap-2">
+              <Icon name="shield-check" size={20} style={{ color: '#2563eb' }}/>
+              <span className="text-sm font-semibold text-slate-700">Workforce Risk & WHS Diagnostic</span>
+              <span className="ml-auto text-xs text-slate-400 hidden sm:block">For HR, WHS and Operations leaders · Australia</span>
+            </div>
+          </div>
+
+          <div className="max-w-5xl mx-auto px-4 pt-16 pb-14 md:pt-24">
+            <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 tracking-wide uppercase">
+              <Icon name="shield-check" size={13}/>
+              WHS &amp; Workforce Risk Assessment
+            </div>
+
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight mb-6 max-w-3xl">
+              Where is workforce risk sitting in your business?
+            </h1>
+
+            <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl leading-relaxed">
+              A short interactive diagnostic for HR, WHS and operational leaders to assess employee risk,
+              psychosocial exposure, and workforce cost — calibrated to your industry and workforce profile.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10 max-w-2xl">
+              {[
+                { icon: 'target', text: 'Identify employee risk signals' },
+                { icon: 'shield-check', text: 'Understand WHS / psychosocial exposure' },
+                { icon: 'trending-up', text: 'Estimate annual business cost' },
+                { icon: 'users', text: 'Spot gaps in workforce support' },
+              ].map(({ icon, text }) => (
+                <div key={text} className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Icon name={icon} size={15} style={{ color: '#2563eb' }}/>
+                  </div>
+                  <span className="text-sm font-medium text-slate-700">{text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <button onClick={onStart}
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-xl transition-colors text-base shadow-sm">
+                Start Diagnostic <Icon name="arrow-right" size={18}/>
+              </button>
+              <span className="text-sm text-slate-400">~5 minutes · No login required</span>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border-t border-slate-100">
+            <div className="max-w-5xl mx-auto px-4 py-12">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  { icon: 'bar-chart', title: 'Four risk dimensions scored', body: 'Receive scored assessments across employee risk, business/operational risk, WHS / psychosocial exposure, and EVP support equity.' },
+                  { icon: 'trending-up', title: 'Cost exposure estimate', body: 'See a directional estimate of annual workforce cost exposure — covering turnover, absenteeism, operational disruption, and productivity drag.' },
+                  { icon: 'target', title: 'Plain-English observations', body: 'Receive specific insights based on your industry, workforce profile, and current risk controls — not a generic report.' },
+                ].map(({ icon, title, body }) => (
+                  <div key={title} className="flex gap-4">
+                    <div className="w-9 h-9 bg-white border border-slate-200 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Icon name={icon} size={16} style={{ color: '#2563eb' }}/>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900 mb-1.5 text-sm">{title}</h3>
+                      <p className="text-sm text-slate-500 leading-relaxed">{body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-5xl mx-auto px-4 py-12">
+            <div className="bg-slate-900 rounded-2xl p-8 md:p-10">
+              <div className="max-w-2xl">
+                <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3">Why this matters</p>
+                <p className="text-white text-lg md:text-xl font-medium leading-relaxed mb-4">
+                  Employee financial stress is a psychosocial hazard. It doesn't stay contained to the individual — it shows up in your absence data, your overtime costs, your roster gaps, and your safety exposure.
+                </p>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  This diagnostic is designed to help you see the connection between employee financial pressure, operational risk, and WHS obligation — and to surface where your current support measures may be leaving frontline workers behind.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 py-6 px-4">
+            <div className="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+              <span className="text-xs text-slate-400">Workforce Risk & WHS Diagnostic · For Australian HR, WHS and Operations leaders</span>
+              <span className="text-xs text-slate-400">Not legal or financial advice · Results are indicative only</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── INDUSTRY PAGE ──────────────────────────────────────────────────────
+
+    function IndustryPage({ selected, onSelect, onNext }) {
+      return (
+        <div>
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Select your industry</h2>
+            <p className="text-slate-600 text-sm leading-relaxed">This calibrates risk scenarios, cost benchmarks, and observations to your operating context.</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {INDUSTRIES.map(ind => {
+              const isSel = selected === ind.id;
+              return (
+                <button key={ind.id} onClick={() => onSelect(ind.id)}
+                  className={`p-5 rounded-xl border-2 text-left transition-all duration-150 ${isSel ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}>
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl leading-none mt-0.5">{ind.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-semibold text-sm ${isSel ? 'text-blue-900' : 'text-slate-900'}`}>{ind.label}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 leading-snug">{ind.description}</div>
+                    </div>
+                    {isSel && (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selected && (() => {
+            const ind = INDUSTRIES.find(i => i.id === selected);
+            return (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm">
+                <p className="text-blue-800 font-medium mb-0.5">{ind.label} selected</p>
+                <p className="text-blue-600 text-xs">{ind.riskContext}</p>
+              </div>
+            );
+          })()}
+
+          <button onClick={onNext} disabled={!selected}
+            className={`inline-flex items-center justify-center gap-2 font-semibold px-8 py-3.5 rounded-xl transition-colors text-sm ${selected ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+            Continue <Icon name="chevron-right" size={18}/>
+          </button>
+        </div>
+      );
+    }
+
+    // ─── WORKFORCE PROFILE PAGE ─────────────────────────────────────────────
+
+    function ToggleGroup({ options, value, onChange }) {
+      return (
+        <div className="flex flex-wrap gap-2">
+          {options.map(opt => (
+            <button key={opt.value} onClick={() => onChange(opt.value)}
+              className={`px-5 py-2 rounded-lg border-2 text-sm font-medium transition-colors duration-150 ${value === opt.value ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'}`}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function WorkforceProfilePage({ profile, onChange, onNext, onBack }) {
+      const isValid = profile.employeeCount > 0 && profile.averageSalary > 0;
+
+      const frontlineLabel = profile.frontlinePercentage === 0 ? 'Entirely office-based'
+        : profile.frontlinePercentage === 100 ? 'Entirely frontline / shift-based'
+        : profile.frontlinePercentage <= 30 ? 'Predominantly office-based'
+        : profile.frontlinePercentage >= 70 ? 'Predominantly frontline'
+        : 'Mixed workforce';
+
+      const turnoverLabel = profile.turnoverRate <= 10 ? 'Low turnover'
+        : profile.turnoverRate <= 25 ? 'Moderate turnover'
+        : profile.turnoverRate <= 40 ? 'Elevated turnover' : 'High turnover';
+
+      return (
+        <div>
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Workforce profile</h2>
+            <p className="text-slate-600 text-sm leading-relaxed">These inputs calibrate risk exposure and estimate cost impact. Approximate figures are fine.</p>
+          </div>
+
+          <div className="space-y-7">
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-0.5">Number of employees</label>
+              <p className="text-xs text-slate-500 mb-2">Total headcount, including part-time and casual</p>
+              <input type="number" min="1" value={profile.employeeCount || ''} placeholder="e.g. 150"
+                onChange={e => onChange({ employeeCount: parseInt(e.target.value) || 0 })}
+                className="w-full sm:w-72 px-4 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-0.5">Frontline / shift-based workforce</label>
+              <p className="text-xs text-slate-500 mb-2">Percentage of employees in hourly, rostered, or operational roles</p>
+              <div className="flex items-center gap-4">
+                <input type="range" min="0" max="100" step="5" value={profile.frontlinePercentage}
+                  onChange={e => onChange({ frontlinePercentage: parseInt(e.target.value) })}
+                  className="w-full sm:w-64"/>
+                <div className="text-right min-w-[90px]">
+                  <span className="text-base font-bold text-slate-900">{profile.frontlinePercentage}%</span>
+                  <p className="text-xs text-slate-500 leading-tight mt-0.5">{frontlineLabel}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-0.5">Average annual turnover rate</label>
+              <p className="text-xs text-slate-500 mb-2">Voluntary and involuntary exits as a percentage of total headcount</p>
+              <div className="flex items-center gap-4">
+                <input type="range" min="0" max="100" step="1" value={profile.turnoverRate}
+                  onChange={e => onChange({ turnoverRate: parseInt(e.target.value) })}
+                  className="w-full sm:w-64"/>
+                <div className="text-right min-w-[90px]">
+                  <span className="text-base font-bold text-slate-900">{profile.turnoverRate}%</span>
+                  <p className="text-xs text-slate-500 leading-tight mt-0.5">{turnoverLabel}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-0.5">Average annual salary or wage (AUD)</label>
+              <p className="text-xs text-slate-500 mb-2">Approximate average across your workforce</p>
+              <div className="relative w-full sm:w-72">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">$</span>
+                <input type="number" min="0" step="5000" value={profile.averageSalary || ''} placeholder="e.g. 65000"
+                  onChange={e => onChange({ averageSalary: parseInt(e.target.value) || 0 })}
+                  className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-2">Pay frequency</label>
+              <ToggleGroup value={profile.payFrequency} onChange={v => onChange({ payFrequency: v })}
+                options={[{ value: 'weekly', label: 'Weekly' }, { value: 'fortnightly', label: 'Fortnightly' }, { value: 'monthly', label: 'Monthly' }]}/>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-800 mb-2">Have unplanned absences increased over the last 12 months?</label>
+              <ToggleGroup value={profile.absencesIncreased} onChange={v => onChange({ absencesIncreased: v })}
+                options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'unsure', label: 'Unsure' }]}/>
+            </div>
+          </div>
+
+          {!isValid && (
+            <div className="flex items-center gap-2 mt-5 text-slate-500 text-xs">
+              <Icon name="info" size={13}/> Enter employee count and average salary to continue.
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-10">
+            <button onClick={onBack} className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-5 py-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm">
+              <Icon name="chevron-left" size={16}/> Back
+            </button>
+            <button onClick={onNext} disabled={!isValid}
+              className={`inline-flex items-center gap-2 font-semibold px-8 py-3 rounded-xl transition-colors text-sm ${isValid ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+              Continue <Icon name="chevron-right" size={16}/>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── RISK SIGNALS PAGE ──────────────────────────────────────────────────
+
+    function CheckboxItem({ uid, label, checked, onChange, checkedBorder, checkedBg, checkedText }) {
+      return (
+        <label htmlFor={uid}
+          className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all duration-150 ${checked ? `${checkedBorder} ${checkedBg}` : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'}`}>
+          <input type="checkbox" id={uid} checked={checked} onChange={onChange}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 flex-shrink-0"/>
+          <span className={`text-sm leading-snug ${checked ? checkedText + ' font-medium' : 'text-slate-700'}`}>{label}</span>
+        </label>
+      );
+    }
+
+    function SignalSection({ badge, title, items, selected, prefix, onToggle, badgeBg, badgeText, checkedBorder, checkedBg, checkedText }) {
+      return (
+        <div className="mb-8">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className={`w-6 h-6 rounded-full ${badgeBg} ${badgeText} text-xs font-bold flex items-center justify-center flex-shrink-0`}>{badge}</div>
+            <h3 className="font-semibold text-slate-800 text-sm">{title}</h3>
+            <span className="text-xs text-slate-400 ml-auto bg-slate-100 px-2 py-0.5 rounded-full">{selected.length}/{items.length}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {items.map(item => (
+              <CheckboxItem key={item.id} uid={`${prefix}-${item.id}`} label={item.label}
+                checked={selected.includes(item.id)} onChange={() => onToggle(item.id)}
+                checkedBorder={checkedBorder} checkedBg={checkedBg} checkedText={checkedText}/>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function RiskSignalsPage({ selected, onChange, onNext, onBack }) {
+      const total = selected.employeeSignals.length + selected.operationalSignals.length + selected.whsSignals.length;
+      return (
+        <div>
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Risk signal checklist</h2>
+            <p className="text-slate-600 text-sm leading-relaxed">Select the signals your organisation is currently seeing. Selecting none is a valid answer.</p>
+          </div>
+
+          <SignalSection badge="A" title="Employee / financial stress signals"
+            items={EMPLOYEE_SIGNALS} selected={selected.employeeSignals} prefix="emp"
+            onToggle={id => onChange('employeeSignals', id)}
+            badgeBg="bg-amber-100" badgeText="text-amber-700"
+            checkedBorder="border-amber-200" checkedBg="bg-amber-50" checkedText="text-amber-900"/>
+
+          <SignalSection badge="B" title="Operational / workforce impact signals"
+            items={OPERATIONAL_SIGNALS} selected={selected.operationalSignals} prefix="ops"
+            onToggle={id => onChange('operationalSignals', id)}
+            badgeBg="bg-orange-100" badgeText="text-orange-700"
+            checkedBorder="border-orange-200" checkedBg="bg-orange-50" checkedText="text-orange-900"/>
+
+          <SignalSection badge="C" title="WHS / psychosocial risk signals"
+            items={WHS_SIGNALS} selected={selected.whsSignals} prefix="whs"
+            onToggle={id => onChange('whsSignals', id)}
+            badgeBg="bg-red-100" badgeText="text-red-700"
+            checkedBorder="border-red-200" checkedBg="bg-red-50" checkedText="text-red-900"/>
+
+          {total > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-sm text-slate-600">
+              <strong className="text-slate-800">{total} signal{total !== 1 ? 's' : ''} selected</strong> — these will be factored into your risk scores.
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={onBack} className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-5 py-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm">
+              <Icon name="chevron-left" size={16}/> Back
+            </button>
+            <button onClick={onNext} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors text-sm">
+              Continue <Icon name="chevron-right" size={16}/>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── SUPPORT MEASURES PAGE ──────────────────────────────────────────────
+
+    function SupportCheckbox({ uid, label, checked, onChange, variant }) {
+      const styles = {
+        blue:        { border: checked ? 'border-blue-200'    : 'border-slate-200', bg: checked ? 'bg-blue-50'    : 'bg-white hover:border-slate-300 hover:bg-slate-50', text: checked ? 'text-blue-900 font-medium'    : 'text-slate-700' },
+        emerald:     { border: checked ? 'border-emerald-200' : 'border-slate-200', bg: checked ? 'bg-emerald-50' : 'bg-white hover:border-slate-300 hover:bg-slate-50', text: checked ? 'text-emerald-900 font-medium' : 'text-slate-700' },
+        'none-opt':  { border: checked ? 'border-slate-300'   : 'border-slate-200', bg: checked ? 'bg-slate-100'  : 'bg-white hover:border-slate-300 hover:bg-slate-50', text: checked ? 'text-slate-700 font-medium'   : 'text-slate-500' },
+      };
+      const s = styles[variant] || styles.blue;
+      return (
+        <label htmlFor={uid} className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-all duration-150 ${s.border} ${s.bg}`}>
+          <input type="checkbox" id={uid} checked={checked} onChange={onChange} className="mt-0.5 h-4 w-4 rounded border-slate-300 flex-shrink-0"/>
+          <span className={`text-sm leading-snug ${s.text}`}>{label}</span>
+        </label>
+      );
+    }
+
+    function SupportMeasuresPage({ selected, onChange, onNext, onBack }) {
+      const wcCount = selected.whiteCollarSupports.length;
+      const flActualCount = selected.frontlineSupports.filter(s => s !== 'none').length;
+      const hasNone = selected.frontlineSupports.includes('none');
+      const hasImbalance = wcCount >= 3 && (hasNone || wcCount > flActualCount + 2);
+
+      return (
+        <div>
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Current support measures</h2>
+            <p className="text-slate-600 text-sm leading-relaxed">Select the support measures your organisation currently has in place. This drives the EVP gap score.</p>
+          </div>
+
+          <div className="mb-8">
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">A</div>
+              <h3 className="font-semibold text-slate-800 text-sm">White-collar / office-based supports</h3>
+              <span className="text-xs text-slate-400 ml-auto bg-slate-100 px-2 py-0.5 rounded-full">{wcCount}/{WC_SUPPORTS.length}</span>
+            </div>
+            <p className="text-xs text-slate-500 ml-8 mb-3">Benefits and supports typically available to salaried or office-based employees</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {WC_SUPPORTS.map(sup => (
+                <SupportCheckbox key={sup.id} uid={`wc-${sup.id}`} label={sup.label}
+                  checked={selected.whiteCollarSupports.includes(sup.id)}
+                  onChange={() => onChange('whiteCollarSupports', sup.id)} variant="blue"/>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center flex-shrink-0">B</div>
+              <h3 className="font-semibold text-slate-800 text-sm">Frontline / broader workforce supports</h3>
+              <span className="text-xs text-slate-400 ml-auto bg-slate-100 px-2 py-0.5 rounded-full">{flActualCount}/{FL_SUPPORTS.length - 1}</span>
+            </div>
+            <p className="text-xs text-slate-500 ml-8 mb-3">Supports available to frontline, shift-based, or hourly employees</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {FL_SUPPORTS.map(sup => (
+                <SupportCheckbox key={sup.id} uid={`fl-${sup.id}`} label={sup.label}
+                  checked={selected.frontlineSupports.includes(sup.id)}
+                  onChange={() => onChange('frontlineSupports', sup.id)}
+                  variant={sup.id === 'none' ? 'none-opt' : 'emerald'}/>
+              ))}
+            </div>
+          </div>
+
+          {hasImbalance && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <Icon name="alert-triangle" size={16} style={{ color: '#d97706', marginTop: 2, flexShrink: 0 }}/>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Support imbalance detected</p>
+                  <p className="text-sm text-amber-700 mt-0.5 leading-snug">
+                    {hasNone
+                      ? `Your white-collar support profile (${wcCount} measures) has no frontline equivalent. This indicates a significant EVP gap.`
+                      : `Your white-collar profile (${wcCount} measures) is noticeably stronger than your frontline profile (${flActualCount} measures).`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={onBack} className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-5 py-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm">
+              <Icon name="chevron-left" size={16}/> Back
+            </button>
+            <button onClick={onNext} className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors text-sm">
+              Generate Results <Icon name="chevron-right" size={16}/>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── RESULTS PAGE ───────────────────────────────────────────────────────
+
+    function CostBar({ label, amount, total }) {
+      const share = total > 0 ? amount / total : 0;
+      return (
+        <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
+          <div className="flex-1">
+            <div className="text-sm text-slate-700">{label}</div>
+            <div className="h-1.5 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
+              <div className="h-1.5 bg-blue-400 rounded-full" style={{ width: `${Math.min(share * 100, 100)}%` }}/>
+            </div>
+          </div>
+          <div className="text-sm font-semibold text-slate-800 text-right min-w-16">{formatAUDShort(amount)}</div>
+        </div>
+      );
+    }
+
+    function ResultsPage({ results, answers, onRestart }) {
+      const [aboutOpen, setAboutOpen] = useState(false);
+      const [contact, setContact] = useState({ firstName: '', company: '', email: '', role: '' });
+      const [submitted, setSubmitted] = useState(false);
+
+      const { employeeRiskScore, businessRiskScore, whsRiskScore, evpGapScore, cost, observations } = results;
+      const ind = INDUSTRIES.find(i => i.id === answers.industry);
+      const overallRisk = Math.round((employeeRiskScore + businessRiskScore + whsRiskScore) / 3);
+      const overallLevel = getRiskLevel(overallRisk);
+
+      const scoreDesc = {
+        employee: `Your workforce profile suggests ${employeeRiskScore >= 51 ? 'elevated to high' : employeeRiskScore >= 26 ? 'moderate' : 'relatively contained'} employee risk — driven by ${answers.profile.frontlinePercentage >= 50 ? 'frontline workforce exposure, ' : ''}identified signals, and ${answers.profile.payFrequency === 'monthly' ? 'monthly pay cycles.' : 'pay cycle structure.'}`,
+        business: `Operational and business risk is ${businessRiskScore >= 51 ? 'elevated' : businessRiskScore >= 26 ? 'moderate' : 'relatively low'}${answers.profile.turnoverRate >= 20 ? `, with a ${answers.profile.turnoverRate}% turnover rate contributing meaningfully to disruption cost.` : '.'}`,
+        whs: `Your WHS / psychosocial score indicates that ${whsRiskScore >= 51 ? 'psychosocial risk may be emerging through fatigue, distraction, rostering instability, and uneven control measures.' : whsRiskScore >= 26 ? 'some psychosocial risk indicators are present, and a review of current controls is warranted.' : 'psychosocial risk appears relatively contained based on current inputs.'}`,
+        evp: `Your EVP / support profile ${evpGapScore >= 51 ? 'appears stronger for office-based employees than frontline workers — which may increase retention and wellbeing risk in operational teams.' : evpGapScore >= 26 ? 'shows some imbalance between office-based and frontline support coverage.' : 'appears reasonably balanced across employee groups based on reported measures.'}`,
+      };
+
+      const descCards = [
+        { icon: 'users', label: 'Employee Risk', desc: scoreDesc.employee, score: employeeRiskScore },
+        { icon: 'trending-up', label: 'Business Risk', desc: scoreDesc.business, score: businessRiskScore },
+        { icon: 'shield-check', label: 'WHS / Psychosocial', desc: scoreDesc.whs, score: whsRiskScore },
+        { icon: 'alert-triangle', label: 'EVP / Support Gap', desc: scoreDesc.evp, score: evpGapScore },
+      ];
+
+      return (
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Diagnostic Results</p>
+                <h2 className="text-2xl font-bold text-slate-900">Workforce Risk Assessment</h2>
+                {ind && <p className="text-sm text-slate-500 mt-1">{ind.emoji} {ind.label} · {answers.profile.employeeCount} employees</p>}
+              </div>
+              <div className="flex gap-2 no-print">
+                <button onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors text-sm">
+                  <Icon name="printer" size={14}/> Print / Save PDF
+                </button>
+                <button onClick={onRestart}
+                  className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors text-sm">
+                  <Icon name="rotate-ccw" size={14}/> Restart
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl p-5 flex items-center gap-4" style={{ backgroundColor: overallLevel.bgColor }}>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: overallLevel.color + '20' }}>
+                <Icon name="shield-check" size={22} style={{ color: overallLevel.color }}/>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900">Overall Risk Level:</span>
+                  <span className="font-bold text-sm px-2.5 py-0.5 rounded-full" style={{ backgroundColor: overallLevel.color + '25', color: overallLevel.color }}>{overallLevel.label}</span>
+                </div>
+                <p className="text-sm text-slate-600 mt-0.5">Average composite score of {overallRisk}/100 across three primary risk dimensions.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Score gauges */}
+          <div className="mb-8">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Risk Scores</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <ScoreGauge score={employeeRiskScore} label="Employee Risk" sublabel="Financial & individual stress"/>
+              <ScoreGauge score={businessRiskScore} label="Business Risk" sublabel="Operational & cost exposure"/>
+              <ScoreGauge score={whsRiskScore} label="WHS / Psychosocial" sublabel="Hazard & control adequacy"/>
+              <ScoreGauge score={evpGapScore} label="EVP Support Gap" sublabel="Equity of workforce support"/>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+              {descCards.map(({ icon, label, desc, score }) => {
+                const lvl = getRiskLevel(score);
+                return (
+                  <div key={label} className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon name={icon} size={14} style={{ color: lvl.color }}/>
+                      <span className="text-xs font-semibold text-slate-700">{label}</span>
+                      <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: lvl.bgColor, color: lvl.color }}>{lvl.label}</span>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">{desc}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cost */}
+          <div className="mb-8">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Estimated Annual Cost Exposure</h3>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden print-card">
+              <div className="bg-slate-900 p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-slate-400 text-xs font-medium uppercase tracking-wide mb-1">Total estimated exposure</p>
+                  <p className="text-3xl font-bold text-white">{formatAUDShort(cost.total)}</p>
+                  <p className="text-slate-400 text-xs mt-1">per year · directional estimate</p>
+                </div>
+                <div className="text-right hidden sm:block">
+                  <p className="text-slate-400 text-xs mb-1">Full figure</p>
+                  <p className="text-slate-200 text-sm font-semibold">{formatAUD(cost.total)}</p>
+                </div>
+              </div>
+              <div className="p-6">
+                <CostBar label="Turnover and replacement cost" amount={cost.turnover} total={cost.total}/>
+                <CostBar label="Absenteeism and lost productivity" amount={cost.absence} total={cost.total}/>
+                <CostBar label="Operational disruption and overtime" amount={cost.disruption} total={cost.total}/>
+                <CostBar label="Presenteeism and engagement drag" amount={cost.productivity} total={cost.total}/>
+                <div className="bg-slate-50 rounded-xl p-3.5 mt-4 text-xs text-slate-500 leading-relaxed">
+                  <strong className="text-slate-700">Disclaimer:</strong> This estimate is directional and designed to highlight potential areas of business risk. It is based on industry benchmarks, reported workforce inputs, and risk signal data. It is not a precise financial calculation and should not be relied upon as such.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Industry scenario */}
+          {ind && (
+            <div className="mb-8">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Industry Context</h3>
+              <div className="bg-slate-900 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl">{ind.emoji}</span>
+                  <div>
+                    <p className="font-semibold text-white text-sm">{ind.label}</p>
+                    <p className="text-slate-400 text-xs">{ind.riskContext}</p>
+                  </div>
+                </div>
+                <p className="text-slate-300 text-sm leading-relaxed">{ind.scenario}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Key observations */}
+          {observations.length > 0 && (
+            <div className="mb-8">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Key Observations</h3>
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-100">
+                {observations.map((obs, i) => (
+                  <div key={i} className="flex items-start gap-3.5 p-4">
+                    <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</div>
+                    <p className="text-sm text-slate-700 leading-relaxed">{obs}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Score key */}
+          <div className="mb-8">
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Score Key</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { range: '0–25', label: 'Low', color: '#16a34a', bg: '#dcfce7' },
+                  { range: '26–50', label: 'Moderate', color: '#d97706', bg: '#fef3c7' },
+                  { range: '51–75', label: 'Elevated', color: '#ea580c', bg: '#ffedd5' },
+                  { range: '76–100', label: 'High', color: '#dc2626', bg: '#fee2e2' },
+                ].map(({ range, label, color, bg }) => (
+                  <div key={label} className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold" style={{ backgroundColor: bg, color }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }}/>
+                    {range} — {label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div className="mb-8 no-print">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900 mb-1">Want to discuss your results?</h3>
+                <p className="text-slate-600 text-sm leading-relaxed">Leave your details and we'll be in touch. No obligation — just a conversation about what these results might mean for your organisation.</p>
+              </div>
+              {submitted ? (
+                <div className="p-8 flex flex-col items-center text-center gap-3">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <Icon name="check-circle" size={24} style={{ color: '#16a34a' }}/>
+                  </div>
+                  <p className="font-semibold text-slate-900">Details received</p>
+                  <p className="text-sm text-slate-500 max-w-sm">Thank you, {contact.firstName}. We'll be in touch with you at {contact.company} shortly.</p>
+                </div>
+              ) : (
+                <form onSubmit={e => { e.preventDefault(); setSubmitted(true); }} className="p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    {[
+                      { key: 'firstName', label: 'First name', placeholder: 'Sarah', type: 'text', required: true },
+                      { key: 'company', label: 'Company', placeholder: 'Acme Group', type: 'text', required: true },
+                      { key: 'email', label: 'Work email', placeholder: 'sarah@acme.com.au', type: 'email', required: true },
+                      { key: 'role', label: 'Role', placeholder: 'Head of People & Culture', type: 'text', required: false },
+                    ].map(({ key, label, placeholder, type, required }) => (
+                      <div key={key}>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">{label}</label>
+                        <input type={type} required={required} value={contact[key]} placeholder={placeholder}
+                          onChange={e => setContact(c => ({ ...c, [key]: e.target.value }))}
+                          className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button type="submit" className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm">
+                      <Icon name="send" size={14}/> Book a discussion
+                    </button>
+                    <button type="button" onClick={() => window.print()} className="inline-flex items-center justify-center gap-2 text-slate-700 hover:text-slate-900 font-medium px-6 py-3 rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm">
+                      <Icon name="printer" size={14}/> Download summary
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+
+          {/* About */}
+          <div className="mb-10 no-print">
+            <button onClick={() => setAboutOpen(o => !o)}
+              className="w-full flex items-center justify-between px-5 py-4 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm font-semibold text-slate-700">
+              About this diagnostic
+              <Icon name={aboutOpen ? 'chevron-up' : 'chevron-down'} size={16}/>
+            </button>
+            {aboutOpen && (
+              <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl px-5 pb-5 pt-4 text-sm text-slate-600 leading-relaxed space-y-3">
+                <p><strong className="text-slate-800">Financial stress as a workforce hazard.</strong> Employee financial stress is not simply a personal issue — it is a recognised psychosocial hazard under Australian WHS frameworks. When workers are under sustained financial pressure, the effects surface in your data: absence rates rise, attention and cognitive performance decline, interpersonal friction increases, and the risk of errors in safety-sensitive environments escalates.</p>
+                <p><strong className="text-slate-800">From employee pressure to operational and WHS risk.</strong> Financial stress doesn't stay contained to the individual. It transfers to operational systems through increased absence, reduced roster reliability, higher manager workload, and elevated turnover. In environments where headcount and attention are critical — aged care, logistics, manufacturing, and hospitality — this is a risk management issue, not a wellbeing issue.</p>
+                <p><strong className="text-slate-800">What this tool measures.</strong> This diagnostic assesses four dimensions: employee financial and stress risk; operational and business cost risk; WHS and psychosocial exposure; and EVP equity — the degree to which support measures are available consistently across your workforce. It is designed for HR, People & Culture, WHS, and Operations leaders to use as a reflection and planning tool, not as a compliance instrument.</p>
+                <p className="text-slate-500 text-xs border-t border-slate-100 pt-3">This tool is for HR and WHS reflection purposes only. It does not constitute legal, financial, or professional advice. Cost estimates are directional indicators only. Results should be interpreted in the context of your specific organisation, industry, and workforce.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ─── MAIN APP ────────────────────────────────────────────────────────────
+
+    const DEFAULT_PROFILE = {
+      employeeCount: 0,
+      frontlinePercentage: 50,
+      turnoverRate: 15,
+      averageSalary: 0,
+      payFrequency: 'fortnightly',
+      absencesIncreased: 'unsure',
+    };
+
+    const DEFAULT_ANSWERS = {
+      industry: null,
+      profile: DEFAULT_PROFILE,
+      riskSignals: { employeeSignals: [], operationalSignals: [], whsSignals: [] },
+      supportMeasures: { whiteCollarSupports: [], frontlineSupports: [] },
+    };
+
+    function App() {
+      const [step, setStep] = useState(0);
+      const [answers, setAnswers] = useState(DEFAULT_ANSWERS);
+
+      const updateProfile = (updates) =>
+        setAnswers(a => ({ ...a, profile: { ...a.profile, ...updates } }));
+
+      const toggleSignal = (section, id) =>
+        setAnswers(a => {
+          const cur = a.riskSignals[section];
+          return { ...a, riskSignals: { ...a.riskSignals, [section]: cur.includes(id) ? cur.filter(s => s !== id) : [...cur, id] } };
+        });
+
+      const toggleSupport = (section, id) =>
+        setAnswers(a => {
+          const cur = a.supportMeasures[section];
+          let updated;
+          if (section === 'frontlineSupports' && id === 'none') {
+            updated = cur.includes('none') ? [] : ['none'];
+          } else if (section === 'frontlineSupports' && cur.includes('none')) {
+            updated = [id];
+          } else {
+            updated = cur.includes(id) ? cur.filter(s => s !== id) : [...cur, id];
+          }
+          return { ...a, supportMeasures: { ...a.supportMeasures, [section]: updated } };
+        });
+
+      const restart = () => { setAnswers(DEFAULT_ANSWERS); setStep(0); window.scrollTo({ top: 0 }); };
+      const goTo = (s) => { setStep(s); window.scrollTo({ top: 0 }); };
+
+      if (step === 0) return <LandingPage onStart={() => goTo(1)}/>;
+
+      const results = step === 5 ? calculateScores(answers) : null;
+
+      return (
+        <div className="min-h-screen bg-slate-50">
+          <div className="bg-white border-b border-slate-100 sticky top-0 z-10">
+            <div className="max-w-3xl mx-auto px-4 py-3.5 flex items-center gap-2">
+              <Icon name="shield-check" size={18} style={{ color: '#2563eb', flexShrink: 0 }}/>
+              <span className="text-sm font-semibold text-slate-800">Workforce Risk & WHS Diagnostic</span>
+              {step < 5 && <span className="ml-auto text-xs text-slate-400 hidden sm:block">For HR, WHS and Operations leaders</span>}
+            </div>
+          </div>
+
+          <div className={step === 5 ? 'max-w-4xl mx-auto px-4 py-8' : 'max-w-3xl mx-auto px-4 py-8'}>
+            {step >= 1 && step <= 4 && (
+              <div className="mb-8"><ProgressBar currentStep={step}/></div>
+            )}
+
+            {step === 1 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <IndustryPage selected={answers.industry} onSelect={ind => setAnswers(a => ({ ...a, industry: ind }))} onNext={() => goTo(2)}/>
+              </div>
+            )}
+            {step === 2 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <WorkforceProfilePage profile={answers.profile} onChange={updateProfile} onNext={() => goTo(3)} onBack={() => goTo(1)}/>
+              </div>
+            )}
+            {step === 3 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <RiskSignalsPage selected={answers.riskSignals} onChange={toggleSignal} onNext={() => goTo(4)} onBack={() => goTo(2)}/>
+              </div>
+            )}
+            {step === 4 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <SupportMeasuresPage selected={answers.supportMeasures} onChange={toggleSupport} onNext={() => goTo(5)} onBack={() => goTo(3)}/>
+              </div>
+            )}
+            {step === 5 && results && (
+              <ResultsPage results={results} answers={answers} onRestart={restart}/>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const rootEl = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootEl);
+    root.render(<App/>);
+  </script>
+</body>
+</html>
