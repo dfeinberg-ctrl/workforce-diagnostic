@@ -433,6 +433,321 @@
       );
     }
 
+    // ─── CALCULATION BREAKDOWN COMPONENT ───────────────────────────────────
+
+    function ScoreBar({ label, value, max, color }) {
+      const pct = Math.min((value / max) * 100, 100);
+      return (
+        <div className="mb-1.5">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-slate-600">{label}</span>
+            <span className="font-semibold text-slate-700">{value.toFixed(1)} / {max}</span>
+          </div>
+          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }}/>
+          </div>
+        </div>
+      );
+    }
+
+    function FormulaRow({ label, value, note }) {
+      return (
+        <div className="flex items-start justify-between gap-4 py-2 border-b border-slate-100 last:border-0 text-xs">
+          <div>
+            <span className="text-slate-700 font-medium">{label}</span>
+            {note && <span className="text-slate-400 ml-1.5">{note}</span>}
+          </div>
+          <span className="font-bold text-slate-800 flex-shrink-0">{value}</span>
+        </div>
+      );
+    }
+
+    function CalculationBreakdown({ answers, results }) {
+      const [open, setOpen] = useState(false);
+      const [activeTab, setActiveTab] = useState('scores');
+      const { profile, riskSignals, supportMeasures, industry } = answers;
+      const { employeeRiskScore, businessRiskScore, whsRiskScore, evpGapScore, cost } = results;
+      const ind = INDUSTRIES.find(i => i.id === industry);
+      const mult = ind?.multipliers ?? { turnover: 0.40, absence: 1.10, disruption: 1.10, productivity: 1.00 };
+
+      const wcCount = supportMeasures.whiteCollarSupports.length;
+      const flCount = supportMeasures.frontlineSupports.filter(s => s !== 'none').length;
+      const flRatio = profile.frontlinePercentage / 100;
+      const employees = Math.max(profile.employeeCount, 1);
+      const avgSalary = Math.max(profile.averageSalary, 1);
+
+      // Employee Risk components
+      const emp_frontline = (profile.frontlinePercentage / 100) * 15;
+      const emp_payfreq = profile.payFrequency === 'monthly' ? 10 : profile.payFrequency === 'fortnightly' ? 5 : 2;
+      const emp_absence = profile.absencesIncreased === 'yes' ? 10 : profile.absencesIncreased === 'unsure' ? 5 : 0;
+      const emp_turnover = Math.min((profile.turnoverRate / 50) * 5, 5);
+      const emp_signals = (riskSignals.employeeSignals.length / 8) * 60;
+
+      // Business Risk components
+      const biz_turnover = Math.min((profile.turnoverRate / 100) * 50, 20);
+      const biz_frontline = (profile.frontlinePercentage / 100) * 10;
+      const biz_absence = profile.absencesIncreased === 'yes' ? 5 : profile.absencesIncreased === 'unsure' ? 2 : 0;
+      const biz_signals = (riskSignals.operationalSignals.length / 8) * 65;
+
+      // WHS Risk components
+      const whs_frontline = (profile.frontlinePercentage / 100) * 15;
+      const whs_absence = profile.absencesIncreased === 'yes' ? 10 : profile.absencesIncreased === 'unsure' ? 5 : 0;
+      const whs_turnover = Math.min((profile.turnoverRate / 50) * 5, 5);
+      const whs_signals = (riskSignals.whsSignals.length / 8) * 70;
+
+      // Cost components
+      const turnoverCost = employees * (profile.turnoverRate / 100) * avgSalary * mult.turnover;
+      const absenceCost = employees * flRatio * (avgSalary / 260) * (employeeRiskScore / 100) * 8 * mult.absence;
+      const disruptionCost = employees * 2200 * mult.disruption * (businessRiskScore / 100);
+      const productivityCost = employees * avgSalary * (whsRiskScore / 100) * 0.028 * mult.productivity;
+
+      const SCORE_COLOR = '#2563eb';
+      const tabs = [
+        { id: 'scores', label: 'Risk scores' },
+        { id: 'cost', label: 'Cost model' },
+        { id: 'evp', label: 'EVP gap' },
+      ];
+
+      return (
+        <div className="mb-8 no-print">
+          <button onClick={() => setOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm font-semibold text-slate-700">
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
+              </svg>
+              How we calculated your scores
+            </span>
+            <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16}/>
+          </button>
+
+          {open && (
+            <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl overflow-hidden">
+              {/* Tabs */}
+              <div className="flex border-b border-slate-100 bg-slate-50">
+                {tabs.map(t => (
+                  <button key={t.id} onClick={() => setActiveTab(t.id)}
+                    className={`flex-1 text-xs font-semibold py-2.5 transition-colors ${activeTab === t.id ? 'text-blue-700 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="px-5 py-5">
+                {activeTab === 'scores' && (
+                  <div className="space-y-6">
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Each score is calculated from two components: a <strong className="text-slate-700">profile factor</strong> (up to 30–40 pts, based on your workforce inputs) and a <strong className="text-slate-700">signal factor</strong> (up to 60–70 pts, based on observed risk signals). The two are summed and clamped to 0–100.
+                    </p>
+
+                    {/* Employee Risk */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-slate-800">Employee Risk Score</h4>
+                        <span className="text-xl font-extrabold text-slate-900">{employeeRiskScore}<span className="text-xs font-normal text-slate-400 ml-1">/100</span></span>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3.5 mb-3">
+                        <p className="text-xs text-slate-500 mb-2.5 font-medium uppercase tracking-wide">Profile inputs (max 30 pts)</p>
+                        <ScoreBar label={`Frontline exposure (${profile.frontlinePercentage}% × 15)`} value={emp_frontline} max={15} color="#f59e0b"/>
+                        <ScoreBar label={`Pay frequency — ${profile.payFrequency}`} value={emp_payfreq} max={10} color="#f59e0b"/>
+                        <ScoreBar label={`Absence trend — ${profile.absencesIncreased}`} value={emp_absence} max={10} color="#f59e0b"/>
+                        <ScoreBar label={`Turnover rate (${profile.turnoverRate}%)`} value={emp_turnover} max={5} color="#f59e0b"/>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3.5">
+                        <p className="text-xs text-slate-500 mb-2.5 font-medium uppercase tracking-wide">Signal factor ({riskSignals.employeeSignals.length}/8 signals × 60 pts max)</p>
+                        <ScoreBar label={`${riskSignals.employeeSignals.length} of 8 financial stress signals selected`} value={emp_signals} max={60} color={SCORE_COLOR}/>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {EMPLOYEE_SIGNALS.map(s => (
+                            <span key={s.id} className={`text-xs px-2 py-0.5 rounded-full ${riskSignals.employeeSignals.includes(s.id) ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-slate-100 text-slate-400'}`}>
+                              {s.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-3 px-1 text-xs font-semibold text-slate-600">
+                        <span>Profile ({(emp_frontline + emp_payfreq + emp_absence + emp_turnover).toFixed(1)}) + Signals ({emp_signals.toFixed(1)}) = <strong className="text-slate-900">{employeeRiskScore}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Business Risk */}
+                    <div className="border-t border-slate-100 pt-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-slate-800">Business Risk Score</h4>
+                        <span className="text-xl font-extrabold text-slate-900">{businessRiskScore}<span className="text-xs font-normal text-slate-400 ml-1">/100</span></span>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3.5 mb-3">
+                        <p className="text-xs text-slate-500 mb-2.5 font-medium uppercase tracking-wide">Profile inputs (max 35 pts)</p>
+                        <ScoreBar label={`Turnover rate (${profile.turnoverRate}% of 100%)`} value={biz_turnover} max={20} color="#f59e0b"/>
+                        <ScoreBar label={`Frontline exposure (${profile.frontlinePercentage}% × 10)`} value={biz_frontline} max={10} color="#f59e0b"/>
+                        <ScoreBar label={`Absence trend — ${profile.absencesIncreased}`} value={biz_absence} max={5} color="#f59e0b"/>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3.5">
+                        <p className="text-xs text-slate-500 mb-2.5 font-medium uppercase tracking-wide">Signal factor ({riskSignals.operationalSignals.length}/8 signals × 65 pts max)</p>
+                        <ScoreBar label={`${riskSignals.operationalSignals.length} of 8 operational signals selected`} value={biz_signals} max={65} color={SCORE_COLOR}/>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {OPERATIONAL_SIGNALS.map(s => (
+                            <span key={s.id} className={`text-xs px-2 py-0.5 rounded-full ${riskSignals.operationalSignals.includes(s.id) ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-slate-100 text-slate-400'}`}>
+                              {s.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-3 px-1 text-xs font-semibold text-slate-600">
+                        <span>Profile ({(biz_turnover + biz_frontline + biz_absence).toFixed(1)}) + Signals ({biz_signals.toFixed(1)}) = <strong className="text-slate-900">{businessRiskScore}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* WHS Risk */}
+                    <div className="border-t border-slate-100 pt-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-slate-800">WHS / Psychosocial Risk Score</h4>
+                        <span className="text-xl font-extrabold text-slate-900">{whsRiskScore}<span className="text-xs font-normal text-slate-400 ml-1">/100</span></span>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3.5 mb-3">
+                        <p className="text-xs text-slate-500 mb-2.5 font-medium uppercase tracking-wide">Profile inputs (max 30 pts)</p>
+                        <ScoreBar label={`Frontline exposure (${profile.frontlinePercentage}% × 15)`} value={whs_frontline} max={15} color="#f59e0b"/>
+                        <ScoreBar label={`Absence trend — ${profile.absencesIncreased}`} value={whs_absence} max={10} color="#f59e0b"/>
+                        <ScoreBar label={`Turnover rate (${profile.turnoverRate}%)`} value={whs_turnover} max={5} color="#f59e0b"/>
+                      </div>
+                      <div className="bg-slate-50 rounded-xl p-3.5">
+                        <p className="text-xs text-slate-500 mb-2.5 font-medium uppercase tracking-wide">Signal factor ({riskSignals.whsSignals.length}/8 signals × 70 pts max)</p>
+                        <ScoreBar label={`${riskSignals.whsSignals.length} of 8 WHS / psychosocial signals selected`} value={whs_signals} max={70} color={SCORE_COLOR}/>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {WHS_SIGNALS.map(s => (
+                            <span key={s.id} className={`text-xs px-2 py-0.5 rounded-full ${riskSignals.whsSignals.includes(s.id) ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-slate-100 text-slate-400'}`}>
+                              {s.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between mt-3 px-1 text-xs font-semibold text-slate-600">
+                        <span>Profile ({(whs_frontline + whs_absence + whs_turnover).toFixed(1)}) + Signals ({whs_signals.toFixed(1)}) = <strong className="text-slate-900">{whsRiskScore}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'cost' && (
+                  <div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                      Cost exposure is estimated using four components, each scaled by your workforce inputs and an industry-specific multiplier (
+                      <strong className="text-slate-700">{ind?.label ?? 'your industry'}</strong> multiplier set shown below).
+                      All figures are directional estimates, not exact financial calculations.
+                    </p>
+
+                    <div className="space-y-4">
+                      {/* Turnover */}
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-slate-800">1. Turnover & replacement cost</p>
+                          <span className="text-sm font-extrabold text-slate-900">{formatAUDShort(cost.turnover)}</span>
+                        </div>
+                        <FormulaRow label="Employees × turnover rate" value={`${employees} × ${profile.turnoverRate}%`} note="= exits per year"/>
+                        <FormulaRow label="Average salary × replacement multiplier" value={`${formatAUDShort(avgSalary)} × ${mult.turnover}`} note={`(${ind?.label ?? ''} sector rate)`}/>
+                        <p className="text-xs text-slate-400 mt-2 font-mono bg-white rounded-lg px-3 py-2 border border-slate-100">
+                          {employees} × {(profile.turnoverRate/100).toFixed(2)} × {formatAUDShort(avgSalary)} × {mult.turnover} = <strong className="text-slate-700">{formatAUDShort(cost.turnover)}</strong>
+                        </p>
+                      </div>
+
+                      {/* Absence */}
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-slate-800">2. Absenteeism cost</p>
+                          <span className="text-sm font-extrabold text-slate-900">{formatAUDShort(cost.absence)}</span>
+                        </div>
+                        <FormulaRow label="Frontline headcount" value={`${Math.round(employees * flRatio)} employees (${profile.frontlinePercentage}%)`}/>
+                        <FormulaRow label="Daily rate" value={`${formatAUDShort(avgSalary)} ÷ 260 days = ${formatAUDShort(avgSalary/260)}/day`}/>
+                        <FormulaRow label="Absence risk days" value={`${((employeeRiskScore/100)*8*mult.absence).toFixed(1)} days`} note="scaled by employee risk score"/>
+                        <p className="text-xs text-slate-400 mt-2 font-mono bg-white rounded-lg px-3 py-2 border border-slate-100">
+                          {Math.round(employees * flRatio)} × {formatAUDShort(avgSalary/260)}/day × {((employeeRiskScore/100)*8*mult.absence).toFixed(1)} days = <strong className="text-slate-700">{formatAUDShort(cost.absence)}</strong>
+                        </p>
+                      </div>
+
+                      {/* Disruption */}
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-slate-800">3. Operational disruption & overtime</p>
+                          <span className="text-sm font-extrabold text-slate-900">{formatAUDShort(cost.disruption)}</span>
+                        </div>
+                        <FormulaRow label="Base disruption cost per employee" value={`$2,200 × ${mult.disruption} (sector rate)`}/>
+                        <FormulaRow label="Scaled by business risk score" value={`${businessRiskScore}/100`}/>
+                        <p className="text-xs text-slate-400 mt-2 font-mono bg-white rounded-lg px-3 py-2 border border-slate-100">
+                          {employees} × $2,200 × {mult.disruption} × {(businessRiskScore/100).toFixed(2)} = <strong className="text-slate-700">{formatAUDShort(cost.disruption)}</strong>
+                        </p>
+                      </div>
+
+                      {/* Productivity */}
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-slate-800">4. Presenteeism & productivity drag</p>
+                          <span className="text-sm font-extrabold text-slate-900">{formatAUDShort(cost.productivity)}</span>
+                        </div>
+                        <FormulaRow label="Drag rate" value={`${(whsRiskScore/100 * 0.028 * mult.productivity * 100).toFixed(2)}% of salary cost`} note="scaled by WHS risk score"/>
+                        <p className="text-xs text-slate-400 mt-2 font-mono bg-white rounded-lg px-3 py-2 border border-slate-100">
+                          {employees} × {formatAUDShort(avgSalary)} × {(whsRiskScore/100).toFixed(2)} × 0.028 × {mult.productivity} = <strong className="text-slate-700">{formatAUDShort(cost.productivity)}</strong>
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3 mt-2">
+                        <span className="text-sm font-semibold text-slate-300">Total estimated exposure</span>
+                        <span className="text-lg font-extrabold text-white">{formatAUD(cost.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'evp' && (
+                  <div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                      The EVP Gap score measures the inequality of support coverage between white-collar and frontline employees.
+                      It is weighted by your frontline workforce proportion — a large gap in an organisation that is 80% frontline
+                      carries more risk than the same gap in a 20% frontline business.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <p className="text-xs font-bold text-slate-800 mb-3">Support coverage</p>
+                        <FormulaRow label="White-collar supports ticked" value={`${wcCount} of 8`} note={`= ${((wcCount/8)*100).toFixed(0)}% coverage`}/>
+                        <FormulaRow label="Frontline supports ticked" value={`${flCount} of 9`} note={`= ${((flCount/9)*100).toFixed(0)}% coverage`}/>
+                        <FormulaRow label="Raw coverage gap" value={`${((wcCount/8) - (flCount/9)).toFixed(2)} (white-collar rate − frontline rate)`}/>
+                        <FormulaRow label="Frontline workforce exposure" value={`${profile.frontlinePercentage}% of total headcount`}/>
+                      </div>
+
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <p className="text-xs font-bold text-slate-800 mb-3">Score components</p>
+                        {supportMeasures.frontlineSupports.includes('none') ? (
+                          <FormulaRow label="No frontline support selected" value={`65 + (${wcCount}/8 × 35) = ${Math.round(65 + (wcCount/8)*35)}`} note="maximum gap regime"/>
+                        ) : (
+                          <>
+                            <FormulaRow label="Coverage gap component" value={`${(Math.max(wcCount/8 - flCount/9, 0)*55).toFixed(1)} / 55`}/>
+                            <FormulaRow label="Frontline coverage deficit" value={`${((1 - flCount/9)*25).toFixed(1)} / 25`}/>
+                            <FormulaRow label="Frontline exposure weighting" value={`${((profile.frontlinePercentage/100)*10).toFixed(1)} / 10`}/>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between bg-slate-900 rounded-xl px-4 py-3">
+                        <span className="text-sm font-semibold text-slate-300">EVP Gap Score</span>
+                        <span className="text-lg font-extrabold text-white">{evpGapScore} / 100</span>
+                      </div>
+
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 text-xs text-blue-700 leading-relaxed">
+                        <strong>What this means:</strong> A score of {evpGapScore} indicates that frontline employees have access to
+                        significantly {wcCount > flCount ? 'fewer' : 'comparable'} support measures than office-based staff.
+                        {wcCount > flCount + 2
+                          ? ' This gap is wide enough to be perceptible — and creates risk of inequity-driven disengagement and attrition in operational teams.'
+                          : ' This is broadly consistent with industry norms.'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     function calculateScores(answers) {
       const { industry, profile, riskSignals, supportMeasures } = answers;
       const ind = INDUSTRIES.find(i => i.id === industry);
@@ -1302,6 +1617,8 @@
           </div>
 
           {/* About */}
+          <CalculationBreakdown answers={answers} results={results}/>
+
           <SourcesFooter/>
 
           <div className="mb-10 no-print">
