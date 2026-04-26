@@ -393,6 +393,208 @@
       );
     }
 
+    // ─── ROI CALCULATOR ─────────────────────────────────────────────────────
+
+    function ROICalculator({ totalCostExposure, employeeCount }) {
+      const [implCost, setImplCost] = useState('');
+      const [platformFeePerEmp, setPlatformFeePerEmp] = useState('');
+
+      const impl = parseFloat(implCost.replace(/[^0-9.]/g, '')) || 0;
+      const feePerEmp = parseFloat(platformFeePerEmp.replace(/[^0-9.]/g, '')) || 0;
+      const platformTotal = feePerEmp * Math.max(employeeCount, 0);
+      const totalInvestment = impl + platformTotal;
+      const netSaving = totalCostExposure - totalInvestment;
+      const roiMultiple = totalInvestment > 0 ? (totalCostExposure / totalInvestment) : null;
+      const roiPct = totalInvestment > 0 ? Math.round(((totalCostExposure - totalInvestment) / totalInvestment) * 100) : null;
+      const paybackMonths = totalCostExposure > 0 && totalInvestment > 0
+        ? Math.round((totalInvestment / totalCostExposure) * 12)
+        : null;
+
+      const hasInputs = totalInvestment > 0;
+      const isPositiveROI = netSaving > 0;
+
+      return (
+        <div className="mb-8">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Return on Investment</h3>
+          <p className="text-xs text-slate-400 mb-4">
+            Enter your expected investment costs to see the potential return against your estimated workforce cost exposure.
+          </p>
+
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden print-card">
+            {/* Cost exposure anchor */}
+            <div className="bg-slate-900 px-6 py-5 flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wide mb-0.5">Estimated annual cost exposure</p>
+                <p className="text-2xl font-extrabold text-white">{formatAUD(totalCostExposure)}</p>
+                <p className="text-slate-500 text-xs mt-0.5">The risk cost your business is currently absorbing</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+              </div>
+            </div>
+
+            {/* Inputs */}
+            <div className="p-6 border-b border-slate-100">
+              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-4">Your investment</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {/* Implementation cost */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-0.5">
+                    Implementation cost
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">One-off setup, onboarding, or project cost (AUD)</p>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">$</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={implCost}
+                      onChange={e => setImplCost(e.target.value)}
+                      placeholder="e.g. 25,000"
+                      className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                  </div>
+                  {impl > 0 && (
+                    <p className="text-xs text-slate-500 mt-1.5">{formatAUD(impl)} one-off</p>
+                  )}
+                </div>
+
+                {/* Platform fee */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 mb-0.5">
+                    Platform fee per employee
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">Annual per-employee subscription or licence fee (AUD)</p>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">$</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={platformFeePerEmp}
+                      onChange={e => setPlatformFeePerEmp(e.target.value)}
+                      placeholder="e.g. 120"
+                      className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                  </div>
+                  {feePerEmp > 0 && (
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      {formatAUD(feePerEmp)} × {employeeCount} employees = <strong className="text-slate-700">{formatAUD(platformTotal)}/yr</strong>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Cost breakdown */}
+              {hasInputs && (
+                <div className="mt-5 bg-slate-50 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-600">Implementation (one-off)</span>
+                    <span className="font-semibold text-slate-800">{formatAUD(impl)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-600">Platform fee ({formatAUD(feePerEmp)} × {employeeCount} employees)</span>
+                    <span className="font-semibold text-slate-800">{formatAUD(platformTotal)}/yr</span>
+                  </div>
+                  <div className="border-t border-slate-200 pt-2 flex justify-between text-sm">
+                    <span className="font-semibold text-slate-700">Total first-year investment</span>
+                    <span className="font-bold text-slate-900">{formatAUD(totalInvestment)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ROI output */}
+            {hasInputs ? (
+              <div className="p-6">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-4">Potential return</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  {/* Net saving */}
+                  <div className={`rounded-xl p-4 ${isPositiveROI ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'}`}>
+                    <p className="text-xs font-medium mb-1" style={{ color: isPositiveROI ? '#15803d' : '#dc2626' }}>
+                      Net annual saving
+                    </p>
+                    <p className="text-xl font-extrabold" style={{ color: isPositiveROI ? '#15803d' : '#dc2626' }}>
+                      {netSaving >= 0 ? '' : '−'}{formatAUDShort(Math.abs(netSaving))}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: isPositiveROI ? '#16a34a' : '#dc2626', opacity: 0.8 }}>
+                      {isPositiveROI ? 'exposure reduced' : 'investment exceeds exposure estimate'}
+                    </p>
+                  </div>
+
+                  {/* ROI multiple */}
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                    <p className="text-xs font-medium text-blue-700 mb-1">ROI multiple</p>
+                    <p className="text-xl font-extrabold text-blue-800">
+                      {roiMultiple !== null ? `${roiMultiple.toFixed(1)}×` : '—'}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1 opacity-80">
+                      return per dollar invested
+                    </p>
+                  </div>
+
+                  {/* Payback period */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <p className="text-xs font-medium text-slate-600 mb-1">Payback period</p>
+                    <p className="text-xl font-extrabold text-slate-800">
+                      {paybackMonths !== null
+                        ? paybackMonths < 1 ? '< 1 month'
+                        : paybackMonths === 1 ? '1 month'
+                        : `${paybackMonths} months`
+                        : '—'}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1 opacity-80">to recover full investment</p>
+                  </div>
+                </div>
+
+                {/* Visual bar */}
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="flex justify-between text-xs font-semibold text-slate-500 mb-2">
+                    <span>Investment</span>
+                    <span>vs Estimated exposure</span>
+                  </div>
+                  <div className="relative h-6 bg-slate-200 rounded-full overflow-hidden">
+                    {/* Investment bar */}
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full flex items-center justify-end pr-2"
+                      style={{
+                        width: `${Math.min((totalInvestment / totalCostExposure) * 100, 100)}%`,
+                        backgroundColor: '#2563eb',
+                        minWidth: totalInvestment > 0 ? '2%' : '0%',
+                      }}
+                    >
+                      {totalInvestment / totalCostExposure < 0.85 && totalInvestment > 0 && (
+                        <span className="text-white text-xs font-bold">{formatAUDShort(totalInvestment)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-500 mt-1.5">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-600 inline-block"/>
+                      Investment: {formatAUDShort(totalInvestment)}
+                      {' '}({Math.round((totalInvestment / totalCostExposure) * 100)}% of exposure)
+                    </span>
+                    <span>Exposure: {formatAUDShort(totalCostExposure)}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mt-4 leading-relaxed">
+                  This ROI estimate is directional. It compares your estimated workforce cost exposure against your stated investment
+                  and is intended to frame the business case — not replace a detailed financial analysis. Actual savings will depend
+                  on implementation effectiveness, workforce uptake, and organisational context.
+                </p>
+              </div>
+            ) : (
+              <div className="px-6 py-8 text-center">
+                <p className="text-sm text-slate-500">Enter your investment costs above to see the potential return.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     function SourcesFooter() {
       const [open, setOpen] = useState(false);
       return (
@@ -865,6 +1067,262 @@
       );
     }
 
+    // ─── EVIDENCE & PSYCHOSOCIAL SECTION ────────────────────────────────────
+
+    const FINANCIAL_STRESS_STATS = [
+      {
+        stat: '1 in 3',
+        detail: 'Australian workers experience financial stress',
+        source: 4,
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        stat: '3×',
+        detail: 'more likely to have reduced work performance when financially stressed',
+        source: 5,
+        color: '#ea580c',
+        bg: '#ffedd5',
+      },
+      {
+        stat: '$47B',
+        detail: 'estimated annual cost to Australian employers in lost productivity',
+        source: 5,
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        stat: '35%',
+        detail: 'of employees say financial stress affects their ability to do their job',
+        source: 6,
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        stat: '2×',
+        detail: 'more unplanned absence days among financially stressed workers vs peers',
+        source: 2,
+        color: '#0369a1',
+        bg: '#e0f2fe',
+      },
+      {
+        stat: '47%',
+        detail: 'of aged care workers report high or very high psychological distress',
+        source: 3,
+        color: '#be185d',
+        bg: '#fce7f3',
+      },
+    ];
+
+    const IMPACT_CHAIN = [
+      {
+        trigger: 'Financial stress builds',
+        effect: 'Cognitive load increases — employees spend an estimated 3–4 hours per week at work managing financial problems.',
+        icon: '🧠',
+        source: 5,
+      },
+      {
+        trigger: 'Focus fractures',
+        effect: 'Distraction, impaired decision-making, and heightened emotional reactivity increase the risk of errors, near-misses, and interpersonal friction.',
+        icon: '⚡',
+        source: 2,
+      },
+      {
+        trigger: 'Attendance suffers',
+        effect: 'Unplanned absence rises as stress manifests physically. Short-notice no-shows cascade into roster gaps, overtime spend, and manager overload.',
+        icon: '📅',
+        source: 2,
+      },
+      {
+        trigger: 'Presenteeism sets in',
+        effect: 'Workers show up but perform below capacity. In safety-sensitive roles this is not just a productivity issue — it is a hazard.',
+        icon: '🔋',
+        source: 5,
+      },
+      {
+        trigger: 'Attrition accelerates',
+        effect: 'Financially stressed workers are significantly more likely to leave for marginal pay differences — adding replacement cost on top of the productivity loss.',
+        icon: '🚪',
+        source: 4,
+      },
+    ];
+
+    const PSYCHOSOCIAL_FRAMEWORK = [
+      {
+        title: 'What is a psychosocial hazard?',
+        body: 'A psychosocial hazard is any aspect of work that may cause psychological harm. Under the Model WHS Act 2011 (as amended 2022), employers in all Australian jurisdictions have a positive duty to identify, assess, and control psychosocial hazards — just as they would a physical safety risk.',
+        highlight: null,
+      },
+      {
+        title: 'Where does financial stress fit?',
+        body: 'Safe Work Australia\'s Code of Practice (2022) explicitly identifies job demands, poor support, and financial hardship as recognised psychosocial hazard contributors. When financial stress impairs a worker\'s ability to perform safely, it becomes a workplace risk — not just a personal circumstance.',
+        highlight: 'Code of Practice: Managing psychosocial hazards at work (Safe Work Australia, 2022)',
+      },
+      {
+        title: 'The positive duty obligation',
+        body: 'Unlike the old \'reasonably practicable\' standard, the updated WHS framework creates a proactive obligation. You cannot simply respond to incidents — you must systematically assess and control exposure. Failure to do so may constitute a breach of the primary duty of care.',
+        highlight: 'Model WHS Act s.19 — Primary duty of care',
+      },
+      {
+        title: 'What this means for HR',
+        body: 'HR leaders who document psychosocial hazard assessments — including financial stress indicators — and implement proportionate controls are discharging their duty. Those who are aware of these risks and take no action are building compliance exposure. This diagnostic is a starting point for that documented assessment.',
+        highlight: null,
+      },
+    ];
+
+    function EvidenceSection() {
+      const [open, setOpen] = useState(false);
+      const [tab, setTab] = useState('stats');
+
+      return (
+        <div className="mb-8">
+          <button onClick={() => setOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-4 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors text-sm font-semibold text-slate-700">
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              The evidence: why financial stress is a serious WHS issue
+              <span className="ml-1 bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">Important</span>
+            </span>
+            <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16}/>
+          </button>
+
+          {open && (
+            <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl overflow-hidden">
+              {/* Tabs */}
+              <div className="flex border-b border-slate-100 bg-slate-50">
+                {[
+                  { id: 'stats', label: 'Statistics' },
+                  { id: 'chain', label: 'How it shows up at work' },
+                  { id: 'legal', label: 'Your WHS obligations' },
+                ].map(t => (
+                  <button key={t.id} onClick={() => setTab(t.id)}
+                    className={`flex-1 text-xs font-semibold py-2.5 transition-colors ${tab === t.id ? 'text-blue-700 border-b-2 border-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-5">
+                {/* STATISTICS TAB */}
+                {tab === 'stats' && (
+                  <div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                      These figures are drawn from published Australian research. They quantify what HR and WHS leaders often sense but can't easily prove — that financial stress is a material, measurable workforce risk.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+                      {FINANCIAL_STRESS_STATS.map((s, i) => (
+                        <div key={i} className="rounded-xl p-4 border" style={{ backgroundColor: s.bg, borderColor: s.color + '30' }}>
+                          <div className="flex items-start justify-between">
+                            <span className="text-2xl font-extrabold leading-none" style={{ color: s.color }}>{s.stat}</span>
+                            <sup className="text-[10px] font-bold" style={{ color: s.color + 'aa' }}>[{s.source}]</sup>
+                          </div>
+                          <p className="text-xs leading-snug mt-2" style={{ color: s.color }}>{s.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bg-slate-900 rounded-xl p-4">
+                      <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide mb-2">The headline finding</p>
+                      <p className="text-white text-sm leading-relaxed font-medium">
+                        Financial stress is not a personal problem that happens to occur at work. It is a systematic workforce hazard — measurable in your absence data, overtime costs, error rates, and turnover. The question is not whether it affects your business. It's whether you're measuring it.
+                      </p>
+                      <p className="text-slate-400 text-xs mt-3">Source: PwC Australia, "Financial wellbeing at work" (2022) · AMP, "Financial Wellness in the Workplace" (2023)</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* IMPACT CHAIN TAB */}
+                {tab === 'chain' && (
+                  <div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                      Financial stress doesn't announce itself in a performance review. It enters through a series of small, compounding signals — each one individually explainable, collectively a pattern. Here is how the chain typically unfolds.
+                    </p>
+                    <div className="relative">
+                      {IMPACT_CHAIN.map((item, i) => (
+                        <div key={i} className="flex gap-4 mb-0">
+                          <div className="flex flex-col items-center">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-lg flex-shrink-0 z-10 border-2 border-white shadow-sm">
+                              {item.icon}
+                            </div>
+                            {i < IMPACT_CHAIN.length - 1 && (
+                              <div className="w-0.5 bg-slate-200 flex-1 my-1" style={{ minHeight: 20 }}/>
+                            )}
+                          </div>
+                          <div className="pb-5 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-bold text-slate-900">{item.trigger}</span>
+                              <sup className="text-[10px] text-slate-400 font-bold">[{item.source}]</sup>
+                            </div>
+                            <p className="text-sm text-slate-600 leading-relaxed">{item.effect}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-2">
+                      <p className="text-xs font-semibold text-amber-800 mb-1">Why this is harder to see than physical risk</p>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        Physical hazards are visible. Psychosocial hazards accumulate quietly. A worker who is financially stressed won't necessarily disclose it — but they will show up in your data: more absent, less engaged, more likely to leave. The diagnostic you just completed is designed to surface these signals before they become incidents.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* LEGAL FRAMEWORK TAB */}
+                {tab === 'legal' && (
+                  <div>
+                    <p className="text-xs text-slate-500 leading-relaxed mb-5">
+                      Australian WHS law has changed. The Model WHS Act amendments (2022) and Safe Work Australia's updated Code of Practice create a proactive obligation to manage psychosocial hazards — including those linked to financial pressure. Here is what that means for your organisation.
+                    </p>
+                    <div className="space-y-3 mb-5">
+                      {PSYCHOSOCIAL_FRAMEWORK.map((item, i) => (
+                        <div key={i} className="bg-slate-50 rounded-xl p-4">
+                          <p className="text-sm font-bold text-slate-900 mb-1.5">{item.title}</p>
+                          <p className="text-sm text-slate-600 leading-relaxed">{item.body}</p>
+                          {item.highlight && (
+                            <div className="mt-2.5 inline-flex items-center gap-1.5 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-blue-700">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                              </svg>
+                              {item.highlight}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                      <p className="text-xs font-bold text-red-800 mb-1.5 flex items-center gap-1.5">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        Compliance risk is real and growing
+                      </p>
+                      <p className="text-xs text-red-700 leading-relaxed">
+                        Regulators in most Australian jurisdictions now have explicit powers to investigate psychosocial hazard management. An organisation that cannot demonstrate it has assessed and controlled these hazards — including financial wellbeing risk — is exposed to improvement notices, enforceable undertakings, and in serious cases, prosecution.
+                      </p>
+                    </div>
+
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                      <p className="text-xs font-bold text-emerald-800 mb-1.5 flex items-center gap-1.5">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        What good looks like
+                      </p>
+                      <p className="text-xs text-emerald-800 leading-relaxed">
+                        Organisations discharging their duty have: documented a psychosocial hazard assessment; identified financial stress as a contributing factor; implemented proportionate control measures across their workforce; and can demonstrate those controls are working. This diagnostic is designed to support each of those steps.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     // ─── SCORE GAUGE ────────────────────────────────────────────────────────
 
     function ScoreGauge({ score, label, sublabel }) {
@@ -1007,7 +1465,7 @@
           </div>
 
           <div className="max-w-5xl mx-auto px-4 py-12">
-            <div className="bg-slate-900 rounded-2xl p-8 md:p-10">
+            <div className="bg-slate-900 rounded-2xl p-8 md:p-10 mb-4">
               <div className="max-w-2xl">
                 <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-3">Why this matters</p>
                 <p className="text-white text-lg md:text-xl font-medium leading-relaxed mb-4">
@@ -1016,6 +1474,54 @@
                 <p className="text-slate-400 text-sm leading-relaxed">
                   This diagnostic is designed to help you see the connection between employee financial pressure, operational risk, and WHS obligation — and to surface where your current support measures may be leaving frontline workers behind.
                 </p>
+              </div>
+            </div>
+
+            {/* Psychosocial / legal obligation callout */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                {
+                  icon: '⚖️',
+                  title: 'A legal obligation, not just best practice',
+                  body: 'The Model WHS Act 2011 (amended 2022) creates a positive duty to identify and control psychosocial hazards. Financial stress is explicitly recognised as a contributing factor.',
+                },
+                {
+                  icon: '📊',
+                  title: 'Measurable in your existing data',
+                  body: 'Rising absence, elevated turnover, increased overtime spend — these are the footprints of unmanaged financial stress. This tool maps those signals to risk scores and cost estimates.',
+                },
+                {
+                  icon: '🎯',
+                  title: 'Actionable for HR and WHS leaders',
+                  body: 'This diagnostic surfaces what your workforce is experiencing and where your current supports may be falling short — giving you a documented starting point for a structured response.',
+                },
+              ].map(({ icon, title, body }) => (
+                <div key={title} className="bg-white border border-slate-200 rounded-xl p-5">
+                  <div className="text-2xl mb-3">{icon}</div>
+                  <h4 className="text-sm font-bold text-slate-900 mb-2 leading-snug">{title}</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Statistics strip */}
+          <div className="border-t border-slate-100">
+            <div className="max-w-5xl mx-auto px-4 py-10">
+              <p className="text-xs text-slate-400 text-center mb-6 font-medium uppercase tracking-widest">The scale of the problem · Australian workforce data</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { stat: '1 in 3', label: 'workers report financial stress', source: 'AMP 2023' },
+                  { stat: '$47B', label: 'annual productivity loss to employers', source: 'PwC 2022' },
+                  { stat: '3×', label: 'higher performance impact vs non-stressed peers', source: 'PwC 2022' },
+                  { stat: '2×', label: 'more unplanned absence days', source: 'Safe Work Australia 2023' },
+                ].map(({ stat, label, source }) => (
+                  <div key={stat} className="text-center px-2">
+                    <div className="text-2xl md:text-3xl font-extrabold text-slate-900 mb-1">{stat}</div>
+                    <div className="text-xs text-slate-600 leading-snug mb-1">{label}</div>
+                    <div className="text-[10px] text-slate-400 font-medium">{source}</div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1551,6 +2057,9 @@
             </div>
           )}
 
+          {/* Evidence & psychosocial section */}
+          <EvidenceSection/>
+
           {/* Score key */}
           <div className="mb-8">
             <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
@@ -1570,6 +2079,9 @@
               </div>
             </div>
           </div>
+
+          {/* ROI Calculator */}
+          <ROICalculator totalCostExposure={cost.total} employeeCount={answers.profile.employeeCount}/>
 
           {/* CTA */}
           <div className="mb-8 no-print">
