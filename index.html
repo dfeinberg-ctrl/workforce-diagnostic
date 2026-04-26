@@ -46,6 +46,12 @@
         riskContext: 'High rostering sensitivity · elevated turnover · strong frontline dependency',
         multipliers: { turnover: 0.45, absence: 1.25, disruption: 1.35, productivity: 0.85 },
         scenario: 'Frontline teams facing variable rosters and unexpected expenses may create rostering pressure, higher absenteeism, and manager strain. Financial stress among hospitality workers often surfaces in last-minute no-shows, avoidable turnover, and operational gaps that cascade across shifts. The compounding effect of tight margins and high roster dependency means that individual employee stress translates quickly into business-level disruption.',
+        // Typical wage norms (Australian award + loadings, 2024)
+        typicalHourlyRate: 28,    // Hospitality Industry General Award + casual loading
+        typicalWeeklyHours: 38,
+        typicalAnnualSalary: 56000,
+        defaultWageType: 'hourly',
+        wageNote: 'Based on Hospitality Industry General Award + typical casual loading',
       },
       {
         id: 'retail', label: 'Retail', emoji: '🏬',
@@ -53,6 +59,11 @@
         riskContext: 'Volume dependency · customer impact · presenteeism and engagement risk',
         multipliers: { turnover: 0.40, absence: 1.15, disruption: 1.20, productivity: 0.90 },
         scenario: 'High-volume customer-facing teams may absorb financial stress through disengagement, turnover, and inconsistent shift coverage. In retail, the pressure of financial strain often presents as reduced customer service quality, increased shrinkage risk, and difficulty maintaining rostered headcount. The link between frontline financial wellbeing and customer experience is direct and measurable.',
+        typicalHourlyRate: 26,    // General Retail Industry Award + casual loading
+        typicalWeeklyHours: 35,
+        typicalAnnualSalary: 50000,
+        defaultWageType: 'hourly',
+        wageNote: 'Based on General Retail Industry Award + typical casual loading',
       },
       {
         id: 'aged-care', label: 'Aged Care / Healthcare', emoji: '🏥',
@@ -60,6 +71,11 @@
         riskContext: 'Duty of care · safety-critical environment · high regulatory exposure',
         multipliers: { turnover: 0.52, absence: 1.35, disruption: 1.45, productivity: 1.10 },
         scenario: 'In care environments, fatigue, distraction, and understaffing can quickly move from employee pressure to safety exposure. The regulatory and duty-of-care context means that psychosocial risk in aged care and healthcare has direct implications for resident or patient safety, compliance, and organisational liability. Workforce instability in this sector is not simply an HR issue — it is a clinical and governance risk.',
+        typicalHourlyRate: 33,    // Aged Care Award post Fair Work wage increases
+        typicalWeeklyHours: 38,
+        typicalAnnualSalary: 66000,
+        defaultWageType: 'hourly',
+        wageNote: 'Based on Aged Care Award rates following Fair Work wage increases (2024)',
       },
       {
         id: 'manufacturing', label: 'Manufacturing / Logistics', emoji: '🏭',
@@ -67,6 +83,11 @@
         riskContext: 'Physical safety risk · fatigue sensitivity · operational continuity dependency',
         multipliers: { turnover: 0.40, absence: 1.20, disruption: 1.30, productivity: 1.05 },
         scenario: 'Financial stress combined with fatigue and operational pressure may increase error risk, safety exposure, and replacement cost. In manufacturing and logistics environments, the combination of shift fatigue, financial distraction, and roster gaps creates measurable physical safety risk and compliance exposure. The cost of a single preventable incident typically exceeds the annual investment required to address its root causes.',
+        typicalHourlyRate: 34,    // Manufacturing Award + shift penalties average
+        typicalWeeklyHours: 38,
+        typicalAnnualSalary: 68000,
+        defaultWageType: 'hourly',
+        wageNote: 'Based on Manufacturing and Associated Industries Award + typical shift penalties',
       },
       {
         id: 'corporate', label: 'Professional Services / Corporate', emoji: '🏢',
@@ -74,6 +95,11 @@
         riskContext: 'Presenteeism · talent retention · knowledge worker productivity loss',
         multipliers: { turnover: 0.35, absence: 0.90, disruption: 0.90, productivity: 1.25 },
         scenario: 'In office-based settings, the signals may show up less in shift coverage and more in presenteeism, disengagement, and regrettable attrition. Financial stress in corporate environments often presents as reduced cognitive performance, increased decision fatigue, quiet quitting, and higher-than-expected voluntary turnover among key talent. The cost is real, but harder to see — which makes it easier to underestimate.',
+        typicalHourlyRate: 48,    // ~$95K / 1976 hrs
+        typicalWeeklyHours: 38,
+        typicalAnnualSalary: 95000,
+        defaultWageType: 'annual',
+        wageNote: 'Based on ABS median full-time earnings for professional services (2024)',
       },
     ];
 
@@ -676,7 +702,7 @@
       const flCount = supportMeasures.frontlineSupports.filter(s => s !== 'none').length;
       const flRatio = profile.frontlinePercentage / 100;
       const employees = Math.max(profile.employeeCount, 1);
-      const avgSalary = Math.max(profile.averageSalary, 1);
+      const avgSalary = Math.max(effectiveAnnualSalary(profile), 1);
 
       // Employee Risk components
       const emp_frontline = (profile.frontlinePercentage / 100) * 15;
@@ -995,7 +1021,7 @@
 
       // Cost
       const employees = Math.max(profile.employeeCount, 1);
-      const avgSalary = Math.max(profile.averageSalary, 1);
+      const avgSalary = Math.max(effectiveAnnualSalary(profile), 1);
       const flRatio = profile.frontlinePercentage / 100;
 
       const turnoverCost = employees * (profile.turnoverRate / 100) * avgSalary * mult.turnover;
@@ -1623,8 +1649,11 @@
       );
     }
 
-    function WorkforceProfilePage({ profile, onChange, onNext, onBack }) {
-      const isValid = profile.employeeCount > 0 && profile.averageSalary > 0;
+    function WorkforceProfilePage({ profile, industry, onChange, onNext, onBack }) {
+      const annualEquiv = effectiveAnnualSalary(profile);
+      const isValid = profile.employeeCount > 0 && annualEquiv > 0;
+
+      const ind = INDUSTRIES.find(i => i.id === industry);
 
       const frontlineLabel = profile.frontlinePercentage === 0 ? 'Entirely office-based'
         : profile.frontlinePercentage === 100 ? 'Entirely frontline / shift-based'
@@ -1636,12 +1665,39 @@
         : profile.turnoverRate <= 25 ? 'Moderate turnover'
         : profile.turnoverRate <= 40 ? 'Elevated turnover' : 'High turnover';
 
+      const switchWageType = (type) => {
+        if (type === 'hourly') {
+          // Convert current annual → implied hourly (÷ weeklyHours ÷ 52), rounded to nearest 0.50
+          const implied = profile.averageSalary > 0
+            ? Math.round((profile.averageSalary / (profile.weeklyHours * 52)) * 2) / 2
+            : (ind?.typicalHourlyRate ?? 0);
+          onChange({ wageType: 'hourly', hourlyRate: implied || (ind?.typicalHourlyRate ?? 0) });
+        } else {
+          // Convert current hourly → annual
+          const implied = profile.hourlyRate > 0
+            ? Math.round(profile.hourlyRate * profile.weeklyHours * 52 / 1000) * 1000
+            : (ind?.typicalAnnualSalary ?? 0);
+          onChange({ wageType: 'annual', averageSalary: implied || (ind?.typicalAnnualSalary ?? 0) });
+        }
+      };
+
       return (
         <div>
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Workforce profile</h2>
             <p className="text-slate-600 text-sm leading-relaxed">These inputs calibrate risk exposure and estimate cost impact. Approximate figures are fine.</p>
           </div>
+
+          {profile.wagePreFilled && ind && (
+            <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-6 text-xs text-blue-700">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>
+                <strong>Pre-filled with {ind.label} industry estimate</strong> — {ind.wageNote}. Adjust to match your actual workforce.
+              </span>
+            </div>
+          )}
 
           <div className="space-y-7">
             <div>
@@ -1680,15 +1736,78 @@
               </div>
             </div>
 
+            {/* Wage input — hourly or annual */}
             <div>
-              <label className="block text-sm font-semibold text-slate-800 mb-0.5">Average annual salary or wage (AUD)</label>
-              <p className="text-xs text-slate-500 mb-2">Approximate average across your workforce</p>
-              <div className="relative w-full sm:w-72">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">$</span>
-                <input type="number" min="0" step="5000" value={profile.averageSalary || ''} placeholder="e.g. 65000"
-                  onChange={e => onChange({ averageSalary: parseInt(e.target.value) || 0 })}
-                  className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="text-sm font-semibold text-slate-800">
+                  {profile.wageType === 'hourly' ? 'Average hourly rate (AUD)' : 'Average annual salary (AUD)'}
+                </label>
+                {/* Hourly / Annual toggle */}
+                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
+                  {[{ value: 'hourly', label: 'Hourly' }, { value: 'annual', label: 'Annual' }].map(opt => (
+                    <button key={opt.value} onClick={() => switchWageType(opt.value)}
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-all duration-150 ${profile.wageType === opt.value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {profile.wageType === 'hourly' ? (
+                <div>
+                  <p className="text-xs text-slate-500 mb-3">Average hourly rate across your workforce — include loadings and penalty rates if applicable</p>
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div>
+                      <div className="relative w-40">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">$</span>
+                        <input type="number" min="0" step="0.5" value={profile.hourlyRate || ''} placeholder="e.g. 28.50"
+                          onChange={e => onChange({ hourlyRate: parseFloat(e.target.value) || 0 })}
+                          className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">per hour</p>
+                    </div>
+                    <div className="text-slate-300 text-lg font-light pb-4">×</div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <input type="range" min="20" max="55" step="1" value={profile.weeklyHours}
+                          onChange={e => onChange({ weeklyHours: parseInt(e.target.value) })}
+                          className="w-28"/>
+                        <span className="text-sm font-bold text-slate-900 min-w-[60px]">{profile.weeklyHours} hrs</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">avg hours/week</p>
+                    </div>
+                    <div className="text-slate-300 text-lg font-light pb-4">× 52 wks =</div>
+                    <div className="pb-1">
+                      {profile.hourlyRate > 0 ? (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center">
+                          <p className="text-sm font-extrabold text-slate-900">{formatAUD(annualEquiv)}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">annual equivalent</p>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center opacity-40">
+                          <p className="text-sm font-extrabold text-slate-400">—</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">annual equivalent</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">Approximate average across your workforce</p>
+                  <div className="relative w-full sm:w-72">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">$</span>
+                    <input type="number" min="0" step="5000" value={profile.averageSalary || ''} placeholder="e.g. 65,000"
+                      onChange={e => onChange({ averageSalary: parseInt(e.target.value) || 0 })}
+                      className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"/>
+                  </div>
+                  {profile.averageSalary > 0 && (
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      ≈ ${(profile.averageSalary / (52 * 38)).toFixed(2)}/hr at 38 hrs/wk
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -1706,7 +1825,8 @@
 
           {!isValid && (
             <div className="flex items-center gap-2 mt-5 text-slate-500 text-xs">
-              <Icon name="info" size={13}/> Enter employee count and average salary to continue.
+              <Icon name="info" size={13}/>
+              {profile.wageType === 'hourly' ? 'Enter employee count and hourly rate to continue.' : 'Enter employee count and average salary to continue.'}
             </div>
           )}
 
@@ -2158,9 +2278,13 @@
       employeeCount: 0,
       frontlinePercentage: 50,
       turnoverRate: 15,
-      averageSalary: 0,
+      averageSalary: 0,       // always the effective annual figure used in calculations
+      wageType: 'annual',     // 'annual' | 'hourly'
+      hourlyRate: 0,
+      weeklyHours: 38,
       payFrequency: 'fortnightly',
       absencesIncreased: 'unsure',
+      wagePreFilled: false,   // true if pre-filled from industry norm
     };
 
     const DEFAULT_ANSWERS = {
@@ -2169,6 +2293,14 @@
       riskSignals: { employeeSignals: [], operationalSignals: [], whsSignals: [] },
       supportMeasures: { whiteCollarSupports: [], frontlineSupports: [] },
     };
+
+    // Compute effective annual salary from profile (used in scoring & cost calcs)
+    function effectiveAnnualSalary(profile) {
+      if (profile.wageType === 'hourly') {
+        return Math.round(profile.hourlyRate * profile.weeklyHours * 52);
+      }
+      return profile.averageSalary;
+    }
 
     function App() {
       const [step, setStep] = useState(0);
@@ -2198,7 +2330,29 @@
         });
 
       const restart = () => { setAnswers(DEFAULT_ANSWERS); setStep(0); window.scrollTo({ top: 0 }); };
-      const goTo = (s) => { setStep(s); window.scrollTo({ top: 0 }); };
+
+      const goTo = (s) => {
+        // When moving from industry selection (step 1) → profile (step 2),
+        // pre-fill wage data from industry norms if not yet touched
+        if (s === 2 && answers.industry) {
+          const ind = INDUSTRIES.find(i => i.id === answers.industry);
+          if (ind && !answers.profile.wagePreFilled) {
+            setAnswers(a => ({
+              ...a,
+              profile: {
+                ...a.profile,
+                wageType: ind.defaultWageType,
+                hourlyRate: ind.typicalHourlyRate,
+                weeklyHours: ind.typicalWeeklyHours,
+                averageSalary: ind.typicalAnnualSalary,
+                wagePreFilled: true,
+              },
+            }));
+          }
+        }
+        setStep(s);
+        window.scrollTo({ top: 0 });
+      };
 
       if (step === 0) return <LandingPage onStart={() => goTo(1)}/>;
 
@@ -2221,12 +2375,12 @@
 
             {step === 1 && (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
-                <IndustryPage selected={answers.industry} onSelect={ind => setAnswers(a => ({ ...a, industry: ind }))} onNext={() => goTo(2)}/>
+                <IndustryPage selected={answers.industry} onSelect={ind => setAnswers(a => ({ ...a, industry: ind, profile: { ...a.profile, wagePreFilled: false } }))} onNext={() => goTo(2)}/>
               </div>
             )}
             {step === 2 && (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
-                <WorkforceProfilePage profile={answers.profile} onChange={updateProfile} onNext={() => goTo(3)} onBack={() => goTo(1)}/>
+                <WorkforceProfilePage profile={answers.profile} industry={answers.industry} onChange={updateProfile} onNext={() => goTo(3)} onBack={() => goTo(1)}/>
               </div>
             )}
             {step === 3 && (
