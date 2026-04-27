@@ -35,7 +35,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useRef } = React;
+    const { useState, useRef, useEffect } = React;
 
     // ─── DATA ───────────────────────────────────────────────────────────────
 
@@ -228,6 +228,202 @@
       { id: 9, text: 'Safe Work Australia, "Managing psychosocial hazards at work" (2023). Code of practice under the Model WHS Act 2011 (as amended 2022).' },
       { id: 10, text: 'Safe Work Australia, "Key work health and safety statistics, Australia" (2023). National workers compensation and injury cost data.' },
     ];
+
+    // ─── URL / STORAGE HELPERS ──────────────────────────────────────────────
+
+    function encodeAnswers(answers) {
+      try { return btoa(unescape(encodeURIComponent(JSON.stringify(answers)))); } catch(e) { return ''; }
+    }
+    function decodeAnswers(str) {
+      try { return JSON.parse(decodeURIComponent(escape(atob(str)))); } catch(e) { return null; }
+    }
+    const STORAGE_KEY = 'wfd_session_v1';
+
+    // ─── INTERVENTIONS LIBRARY ───────────────────────────────────────────────
+
+    const INTERVENTIONS = [
+      {
+        id: 'earned-wage-access',
+        title: 'Introduce earned wage access (EWA)',
+        category: 'Financial Wellbeing',
+        icon: '💳',
+        effort: 'Low',
+        time: '2–4 weeks',
+        cost: '$5–$18 per employee / month',
+        impact: 'Est. 15–30% reduction in unplanned absence · significant drop in pay-advance requests · measurable stress reduction',
+        description: 'Allow employees to access a portion of wages they\'ve already earned before the scheduled pay date — removing pay-cycle financial pressure without changing payroll infrastructure.',
+        whyItMatters: 'Directly addresses the root cause of financial stress for frontline and hourly workers. Research shows EWA reduces absenteeism by up to 19% and turnover by up to 36% in high-frontline environments.',
+        condition: (a, r) => r.employeeRiskScore >= 35 && a.profile.frontlinePercentage >= 25,
+        priority: (a, r) => r.employeeRiskScore * 1.2
+          + (a.riskSignals.employeeSignals.includes('pay-advances') ? 25 : 0)
+          + (a.riskSignals.employeeSignals.includes('pay-cycle-struggle') ? 25 : 0)
+          + (a.profile.payFrequency === 'monthly' ? 15 : 0),
+      },
+      {
+        id: 'pay-frequency',
+        title: 'Move to weekly or fortnightly pay cycles',
+        category: 'Payroll & Structural',
+        icon: '📅',
+        effort: 'Medium',
+        time: '4–12 weeks',
+        cost: 'Payroll processing uplift only — typically $0–$5k/yr',
+        impact: 'Directly reduces financial pressure window · measurable drop in pay-advance requests and stress signals',
+        description: 'Reduce the financial vulnerability period by moving from monthly to fortnightly or weekly pay. One of the lowest-cost, highest-impact structural changes for frontline and lower-income workforces.',
+        whyItMatters: 'Monthly pay cycles extend financial pressure periods significantly and are strongly correlated with absenteeism, stress signals, and credit-seeking behaviour in hourly workforces.',
+        condition: (a, r) => a.profile.payFrequency === 'monthly' && a.profile.frontlinePercentage >= 25,
+        priority: (a, r) => 65 + r.employeeRiskScore * 0.3,
+      },
+      {
+        id: 'financial-coaching',
+        title: 'Financial coaching and education program',
+        category: 'Financial Wellbeing',
+        icon: '📚',
+        effort: 'Medium',
+        time: '4–8 weeks',
+        cost: '$200–$800 per employee / year',
+        impact: 'Improved financial resilience · reduced distraction and presenteeism · supports EAP utilisation',
+        description: 'Structured financial literacy and coaching — covering budgeting, debt management, super, and crisis support — delivered through group sessions, digital tools, or one-on-one coaching.',
+        whyItMatters: 'Addresses the knowledge and behaviour layer that structural tools like EWA don\'t reach. Most effective when paired with financial access measures.',
+        condition: (a, r) => r.employeeRiskScore >= 35,
+        priority: (a, r) => r.employeeRiskScore * 0.9
+          + (a.riskSignals.employeeSignals.includes('financial-distraction') ? 20 : 0)
+          + (a.riskSignals.employeeSignals.includes('informal-money-stress') ? 10 : 0),
+      },
+      {
+        id: 'psychosocial-assessment',
+        title: 'Conduct a formal psychosocial hazard assessment',
+        category: 'WHS & Compliance',
+        icon: '⚖️',
+        effort: 'Medium',
+        time: '4–8 weeks',
+        cost: '$5k–$25k (internal or WHS consultant)',
+        impact: 'Compliance risk eliminated · documented controls · legal foundation for all other interventions',
+        description: 'Undertake a structured, documented psychosocial hazard assessment across your workforce in line with Safe Work Australia\'s Code of Practice (2022). This diagnostic is the starting point — a formal assessment creates the legal record.',
+        whyItMatters: 'This is a positive duty obligation under the Model WHS Act 2011 (amended 2022). Failure to demonstrate a documented assessment is a compliance exposure — not just a best-practice gap.',
+        condition: (a, r) => r.whsRiskScore >= 35,
+        priority: (a, r) => r.whsRiskScore * 1.3
+          + (a.riskSignals.whsSignals.includes('inconsistent-assessment') ? 35 : 0),
+      },
+      {
+        id: 'manager-training',
+        title: 'Train managers to recognise and respond to financial stress',
+        category: 'People Leadership',
+        icon: '🎓',
+        effort: 'Low',
+        time: '2–4 weeks',
+        cost: '$500–$2,000 per manager (group training)',
+        impact: 'Earlier identification of at-risk employees · improved manager confidence · fewer crisis escalations',
+        description: 'Equip team leaders and managers with skills to identify financial stress signals, have supportive conversations, and escalate appropriately — without overstepping into financial advice.',
+        whyItMatters: 'Managers are the first point of contact for distressed employees. Without training, they either miss the signals or handle them poorly — compounding the issue and increasing their own emotional load.',
+        condition: (a, r) => a.riskSignals.employeeSignals.includes('informal-money-stress')
+          || a.riskSignals.employeeSignals.includes('hr-financial-requests')
+          || r.whsRiskScore >= 40,
+        priority: (a, r) => r.whsRiskScore * 0.6
+          + (a.riskSignals.employeeSignals.includes('informal-money-stress') ? 30 : 0)
+          + (a.riskSignals.employeeSignals.includes('hr-financial-requests') ? 20 : 0),
+      },
+      {
+        id: 'eap-relaunch',
+        title: 'Relaunch and actively promote your EAP',
+        category: 'Wellbeing Infrastructure',
+        icon: '🤝',
+        effort: 'Low',
+        time: '2–3 weeks',
+        cost: 'Typically $0 additional (reactivation of existing contract)',
+        impact: 'Higher EAP utilisation · earlier stress intervention · reduced WHS claim risk',
+        description: 'Most organisations have an EAP but utilisation sits below 5%. A targeted relaunch — manager champions, de-stigmatisation messaging, clear access pathways — can triple utilisation without adding cost.',
+        whyItMatters: 'EAPs are underused because employees don\'t know they exist, don\'t trust them, or can\'t access them easily. The tool is only effective if people actually use it.',
+        condition: (a, r) => r.whsRiskScore >= 30 && a.supportMeasures.frontlineSupports.includes('eap'),
+        priority: (a, r) => r.whsRiskScore * 0.65,
+      },
+      {
+        id: 'frontline-support-package',
+        title: 'Build a dedicated frontline financial support package',
+        category: 'Financial Wellbeing',
+        icon: '🛡️',
+        effort: 'Medium',
+        time: '6–12 weeks',
+        cost: '$300–$1,500 per frontline employee / year',
+        impact: 'Significant EVP gap reduction · improved frontline retention · measurable engagement uplift',
+        description: 'Design a structured package of supports specifically for frontline and shift-based workers: emergency hardship assistance, transport subsidies, meal benefits, and flexible pay access. Name it, brand it, promote it.',
+        whyItMatters: 'Frontline workers rarely benefit from salary packaging, bonus structures, or professional development budgets. A purpose-built package signals the organisation sees and values them — and creates a meaningful retention lever.',
+        condition: (a, r) => r.evpGapScore >= 45 && a.profile.frontlinePercentage >= 35,
+        priority: (a, r) => r.evpGapScore * 1.15
+          + (a.supportMeasures.frontlineSupports.includes('none') ? 30 : 0)
+          + a.profile.frontlinePercentage * 0.2,
+      },
+      {
+        id: 'evp-audit',
+        title: 'Conduct an EVP equity audit',
+        category: 'People & Culture',
+        icon: '🔍',
+        effort: 'Low',
+        time: '2–4 weeks (audit) · 2–6 months (implementation)',
+        cost: '$0–$10k (audit) · variable implementation',
+        impact: 'Identifies highest-leverage gap closure opportunities · reduces EVP-driven attrition · strengthens employer brand',
+        description: 'Map all current benefits and supports against your full workforce — not just office-based staff. Identify which benefits are inaccessible to frontline or casual workers and develop a prioritised plan to close the gap.',
+        whyItMatters: 'A strong EVP that only reaches 30% of your workforce is a retention risk for the other 70%. The gap is often invisible until attrition data makes it undeniable.',
+        condition: (a, r) => r.evpGapScore >= 40,
+        priority: (a, r) => r.evpGapScore * 1.05,
+      },
+      {
+        id: 'absence-management',
+        title: 'Implement a structured absence management program',
+        category: 'Operations & Workforce',
+        icon: '📋',
+        effort: 'Medium',
+        time: '4–8 weeks',
+        cost: '$2k–$15k (process design + training)',
+        impact: 'Est. 10–20% reduction in absence days · reduced overtime cost · earlier identification of distressed employees',
+        description: 'Move from reactive absence coverage — overtime, manager gap-filling — to a proactive model with return-to-work conversations, pattern tracking, and psychosocial early intervention.',
+        whyItMatters: 'Unplanned absence is a symptom. Managing the symptom without addressing the cause (stress, financial pressure, working conditions) only adds manager workload without reducing risk.',
+        condition: (a, r) => a.profile.absencesIncreased === 'yes'
+          || a.riskSignals.employeeSignals.includes('absence-financial-link')
+          || r.businessRiskScore >= 45,
+        priority: (a, r) => (a.profile.absencesIncreased === 'yes' ? 45 : 0)
+          + (a.riskSignals.employeeSignals.includes('absence-financial-link') ? 30 : 0)
+          + r.businessRiskScore * 0.35,
+      },
+      {
+        id: 'rostering-stability',
+        title: 'Improve roster predictability and advance notice',
+        category: 'Operations & Workforce',
+        icon: '🗓️',
+        effort: 'Medium',
+        time: '4–8 weeks',
+        cost: '$0–$10k (process + scheduling system)',
+        impact: 'Reduced last-minute absences · improved employee financial planning · lower overtime spend',
+        description: 'Introduce minimum roster notice periods (7–14 days), reduce last-minute changes, and implement shift-swap processes that don\'t require manager intervention. Income unpredictability compounds financial stress.',
+        whyItMatters: 'Casual and part-time workers cannot budget when they don\'t know their income week to week. Roster instability is a direct contributor to financial stress — and an avoidable one.',
+        condition: (a, r) => a.riskSignals.operationalSignals.includes('rostering-instability')
+          || a.riskSignals.operationalSignals.includes('last-minute-replacements'),
+        priority: (a, r) => (a.riskSignals.operationalSignals.includes('rostering-instability') ? 40 : 0)
+          + (a.riskSignals.operationalSignals.includes('last-minute-replacements') ? 30 : 0),
+      },
+      {
+        id: 'exit-analysis',
+        title: 'Implement structured exit analysis',
+        category: 'Operations & Workforce',
+        icon: '🚪',
+        effort: 'Low',
+        time: '2–4 weeks',
+        cost: '$0–$5k (internal or survey tool cost)',
+        impact: 'Targeted retention investment · identification of avoidable exits · data to justify intervention budget',
+        description: 'Implement structured exit interviews or surveys and analyse data to identify primary drivers of voluntary turnover. Cross-reference with financial stress and EVP signals to separate avoidable from unavoidable exits.',
+        whyItMatters: 'Most organisations don\'t know precisely why people leave — only that they do. Without exit data, retention investment is untargeted and cannot be measured.',
+        condition: (a, r) => a.profile.turnoverRate >= 20
+          || a.riskSignals.operationalSignals.includes('avoidable-turnover'),
+        priority: (a, r) => (a.profile.turnoverRate / 100) * 55
+          + (a.riskSignals.operationalSignals.includes('avoidable-turnover') ? 25 : 0),
+      },
+    ];
+
+    function getActionPlan(answers, results) {
+      const applicable = INTERVENTIONS.filter(i => i.condition(answers, results));
+      const scored = applicable.map(i => ({ ...i, score: i.priority(answers, results) }));
+      scored.sort((a, b) => b.score - a.score);
+      return scored.slice(0, 6); // top 6
+    }
 
     // ─── SCORING ────────────────────────────────────────────────────────────
 
@@ -1417,7 +1613,9 @@
 
     // ─── LANDING PAGE ───────────────────────────────────────────────────────
 
-    function LandingPage({ onStart }) {
+    function LandingPage({ onStart, showResume, savedIndustry, savedStep, onResume, onDismissResume }) {
+      const savedInd = INDUSTRIES.find(i => i.id === savedIndustry);
+      const STEP_NAMES = ['', 'Industry', 'Workforce Profile', 'Risk Signals', 'Support Measures', 'Results'];
       return (
         <div className="min-h-screen bg-white">
           <div className="border-b border-slate-100 px-4 py-4">
@@ -1427,6 +1625,34 @@
               <span className="ml-auto text-xs text-slate-400 hidden sm:block">For HR, WHS and Operations leaders · Australia</span>
             </div>
           </div>
+
+          {/* Resume banner */}
+          {showResume && (
+            <div className="bg-blue-600 px-4 py-3">
+              <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
+                <div className="flex items-center gap-3">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                    <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.28"/>
+                  </svg>
+                  <span className="text-white text-sm font-medium">
+                    You have a saved session{savedInd ? ` — ${savedInd.emoji} ${savedInd.label}` : ''}.
+                    {savedStep && ` Last step: ${STEP_NAMES[savedStep]}.`}
+                    {' '}Resume where you left off?
+                  </span>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={onResume}
+                    className="bg-white text-blue-700 text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors">
+                    Resume session
+                  </button>
+                  <button onClick={onDismissResume}
+                    className="text-blue-200 hover:text-white text-xs font-medium px-3 py-2 transition-colors">
+                    Start fresh
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="max-w-5xl mx-auto px-4 pt-16 pb-14 md:pt-24">
             <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6 tracking-wide uppercase">
@@ -2011,6 +2237,150 @@
       );
     }
 
+    // ─── ACTION PLAN PAGE ───────────────────────────────────────────────────
+
+    const EFFORT_STYLE = {
+      'Low':    { bg: '#dcfce7', color: '#15803d', label: 'Low effort' },
+      'Medium': { bg: '#fef3c7', color: '#b45309', label: 'Medium effort' },
+      'High':   { bg: '#fee2e2', color: '#dc2626', label: 'High effort' },
+    };
+
+    function InterventionCard({ item, rank }) {
+      const [expanded, setExpanded] = useState(false);
+      const effortStyle = EFFORT_STYLE[item.effort] || EFFORT_STYLE['Medium'];
+      return (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden print-card">
+          <div className="p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 flex flex-col items-center gap-1.5">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center">{rank}</div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{item.category}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: effortStyle.bg, color: effortStyle.color }}>{effortStyle.label}</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900 leading-snug mb-1.5">
+                  <span className="mr-1.5">{item.icon}</span>{item.title}
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
+              </div>
+            </div>
+
+            {/* Key metrics row */}
+            <div className="grid grid-cols-3 gap-2 mt-4 ml-12">
+              {[
+                { label: 'Time to implement', value: item.time },
+                { label: 'Est. cost', value: item.cost },
+              ].map(({ label, value }) => (
+                <div key={label} className="col-span-1 bg-slate-50 rounded-xl px-3 py-2.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
+                  <p className="text-xs font-semibold text-slate-800 leading-snug">{value}</p>
+                </div>
+              ))}
+              <div className="col-span-1 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
+                <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">Expected impact</p>
+                <p className="text-xs font-semibold text-emerald-800 leading-snug">{item.impact.split('·')[0].trim()}</p>
+              </div>
+            </div>
+
+            {/* Expand/collapse */}
+            <button onClick={() => setExpanded(e => !e)}
+              className="mt-3 ml-12 text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors no-print">
+              {expanded ? 'Show less' : 'Why this matters'}
+              <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12}/>
+            </button>
+          </div>
+
+          {expanded && (
+            <div className="border-t border-slate-100 bg-blue-50 px-5 py-4 ml-0">
+              <p className="text-xs font-semibold text-blue-700 mb-1 uppercase tracking-wide">Why this intervention</p>
+              <p className="text-xs text-blue-800 leading-relaxed">{item.whyItMatters}</p>
+              {item.impact.includes('·') && (
+                <div className="mt-3">
+                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-1.5">Expected outcomes</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.impact.split('·').map((s, i) => (
+                      <span key={i} className="text-[10px] font-medium bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-full">{s.trim()}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function ActionPlanTab({ answers, results }) {
+      const plan = getActionPlan(answers, results);
+      const ind = INDUSTRIES.find(i => i.id === answers.industry);
+      const totalCost = results.cost.total;
+
+      if (plan.length === 0) {
+        return (
+          <div className="text-center py-16 text-slate-400">
+            <p className="text-4xl mb-3">✅</p>
+            <p className="font-semibold text-slate-600 mb-1">No high-priority interventions identified</p>
+            <p className="text-sm">Your risk scores are low across all dimensions. Continue monitoring.</p>
+          </div>
+        );
+      }
+
+      const lowEffort = plan.filter(i => i.effort === 'Low');
+      const medEffort = plan.filter(i => i.effort === 'Medium');
+
+      return (
+        <div>
+          {/* Summary header */}
+          <div className="bg-slate-900 rounded-2xl p-6 mb-6">
+            <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-2">Your personalised action plan</p>
+            <p className="text-white text-base font-semibold leading-relaxed mb-4">
+              Based on your {ind?.label} risk profile, {plan.length} prioritised interventions have been identified — ranked by expected impact against your specific signals.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-slate-800 rounded-xl px-4 py-3 text-center">
+                <p className="text-xl font-extrabold text-white">{plan.length}</p>
+                <p className="text-xs text-slate-400 mt-0.5">interventions identified</p>
+              </div>
+              <div className="bg-slate-800 rounded-xl px-4 py-3 text-center">
+                <p className="text-xl font-extrabold text-emerald-400">{lowEffort.length}</p>
+                <p className="text-xs text-slate-400 mt-0.5">low-effort quick wins</p>
+              </div>
+              <div className="bg-slate-800 rounded-xl px-4 py-3 text-center">
+                <p className="text-xl font-extrabold text-white">{formatAUDShort(totalCost)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">annual exposure to address</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick wins callout */}
+          {lowEffort.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 mb-6 flex items-start gap-3">
+              <span className="text-xl flex-shrink-0">⚡</span>
+              <div>
+                <p className="text-sm font-bold text-emerald-800 mb-0.5">Start here — {lowEffort.length} quick win{lowEffort.length > 1 ? 's' : ''} identified</p>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  {lowEffort.map(i => i.title).join(' and ')} {lowEffort.length === 1 ? 'is' : 'are'} low-effort and can be activated within weeks. These create the fastest visible impact and build internal momentum for broader change.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Intervention cards */}
+          <div className="space-y-4">
+            {plan.map((item, i) => (
+              <InterventionCard key={item.id} item={item} rank={i + 1}/>
+            ))}
+          </div>
+
+          <div className="mt-6 bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-xs text-slate-500 leading-relaxed">
+            <strong className="text-slate-700">About this plan:</strong> Interventions are ranked by relevance to your specific risk signals and workforce profile — not by general popularity. Priority scores are computed from your inputs; they are directional, not prescriptive. Cost and time estimates are indicative and will vary by organisation size, existing systems, and implementation approach.
+          </div>
+        </div>
+      );
+    }
+
     // ─── RESULTS PAGE ───────────────────────────────────────────────────────
 
     function CostBar({ label, amount, total }) {
@@ -2029,14 +2399,25 @@
     }
 
     function ResultsPage({ results, answers, onRestart }) {
+      const [activeTab, setActiveTab] = useState('results');
       const [aboutOpen, setAboutOpen] = useState(false);
       const [contact, setContact] = useState({ firstName: '', company: '', email: '', role: '' });
       const [submitted, setSubmitted] = useState(false);
+      const [linkCopied, setLinkCopied] = useState(false);
 
       const { employeeRiskScore, businessRiskScore, whsRiskScore, evpGapScore, cost, observations } = results;
       const ind = INDUSTRIES.find(i => i.id === answers.industry);
       const overallRisk = Math.round((employeeRiskScore + businessRiskScore + whsRiskScore) / 3);
       const overallLevel = getRiskLevel(overallRisk);
+
+      const copyLink = () => {
+        const encoded = encodeAnswers(answers);
+        const url = `${window.location.href.split('#')[0]}#s=${encoded}`;
+        navigator.clipboard.writeText(url).then(() => {
+          setLinkCopied(true);
+          setTimeout(() => setLinkCopied(false), 2500);
+        });
+      };
 
       const scoreDesc = {
         employee: `Your workforce profile suggests ${employeeRiskScore >= 51 ? 'elevated to high' : employeeRiskScore >= 26 ? 'moderate' : 'relatively contained'} employee risk — driven by ${answers.profile.frontlinePercentage >= 50 ? 'frontline workforce exposure, ' : ''}identified signals, and ${answers.profile.payFrequency === 'monthly' ? 'monthly pay cycles.' : 'pay cycle structure.'}`,
@@ -2055,17 +2436,23 @@
       return (
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Diagnostic Results</p>
                 <h2 className="text-2xl font-bold text-slate-900">Workforce Risk Assessment</h2>
                 {ind && <p className="text-sm text-slate-500 mt-1">{ind.emoji} {ind.label} · {answers.profile.employeeCount} employees</p>}
               </div>
-              <div className="flex gap-2 no-print">
+              <div className="flex gap-2 no-print flex-wrap">
+                <button onClick={copyLink}
+                  className={`inline-flex items-center gap-2 font-medium px-4 py-2 rounded-lg border transition-colors text-sm ${linkCopied ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'text-slate-600 hover:text-slate-900 border-slate-200 hover:border-slate-300'}`}>
+                  {linkCopied
+                    ? <><Icon name="check-circle" size={14}/> Link copied!</>
+                    : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Share results</>}
+                </button>
                 <button onClick={() => window.print()}
                   className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors text-sm">
-                  <Icon name="printer" size={14}/> Print / Save PDF
+                  <Icon name="printer" size={14}/> Print / PDF
                 </button>
                 <button onClick={onRestart}
                   className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 font-medium px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors text-sm">
@@ -2087,6 +2474,25 @@
               </div>
             </div>
           </div>
+
+          {/* Tab bar */}
+          <div className="flex bg-slate-100 rounded-xl p-1 mb-8 no-print">
+            {[
+              { id: 'results', label: '📊 Risk Results' },
+              { id: 'plan', label: `⚡ Action Plan (${getActionPlan(answers, results).length})` },
+            ].map(t => (
+              <button key={t.id} onClick={() => { setActiveTab(t.id); window.scrollTo({ top: 0 }); }}
+                className={`flex-1 text-sm font-semibold py-2.5 rounded-lg transition-all duration-200 ${activeTab === t.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ACTION PLAN TAB */}
+          {activeTab === 'plan' && <ActionPlanTab answers={answers} results={results}/>}
+
+          {/* RESULTS TAB */}
+          {activeTab === 'results' && <>
 
           {/* Score gauges */}
           <div className="mb-8">
@@ -2268,6 +2674,7 @@
               </div>
             )}
           </div>
+          </>}
         </div>
       );
     }
@@ -2303,8 +2710,37 @@
     }
 
     function App() {
-      const [step, setStep] = useState(0);
-      const [answers, setAnswers] = useState(DEFAULT_ANSWERS);
+      // ── Bootstrap: decode from URL hash or localStorage ──
+      function getInitialState() {
+        // 1. URL hash takes priority (shared link)
+        const hash = window.location.hash;
+        const hashMatch = hash.match(/[#&]s=([^&]+)/);
+        if (hashMatch) {
+          const decoded = decodeAnswers(hashMatch[1]);
+          if (decoded) return { step: 5, answers: decoded };
+        }
+        // 2. LocalStorage resume
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const { step: s, answers: a } = JSON.parse(saved);
+            if (s >= 1) return { step: s, answers: a, hasSaved: true };
+          }
+        } catch(e) {}
+        return { step: 0, answers: DEFAULT_ANSWERS };
+      }
+
+      const init = getInitialState();
+      const [step, setStep] = useState(init.step);
+      const [answers, setAnswers] = useState(init.answers);
+      const [showResume, setShowResume] = useState(!!init.hasSaved && init.step < 5);
+
+      // ── Persist to localStorage on every change ──
+      useEffect(() => {
+        if (step > 0) {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, answers })); } catch(e) {}
+        }
+      }, [step, answers]);
 
       const updateProfile = (updates) =>
         setAnswers(a => ({ ...a, profile: { ...a.profile, ...updates } }));
@@ -2329,7 +2765,13 @@
           return { ...a, supportMeasures: { ...a.supportMeasures, [section]: updated } };
         });
 
-      const restart = () => { setAnswers(DEFAULT_ANSWERS); setStep(0); window.scrollTo({ top: 0 }); };
+      const restart = () => {
+        try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+        setAnswers(DEFAULT_ANSWERS);
+        setStep(0);
+        window.location.hash = '';
+        window.scrollTo({ top: 0 });
+      };
 
       const goTo = (s) => {
         // When moving from industry selection (step 1) → profile (step 2),
@@ -2354,7 +2796,13 @@
         window.scrollTo({ top: 0 });
       };
 
-      if (step === 0) return <LandingPage onStart={() => goTo(1)}/>;
+      if (step === 0) return <LandingPage onStart={() => goTo(1)}
+        showResume={showResume}
+        savedIndustry={answers.industry}
+        savedStep={init.step}
+        onResume={() => { setShowResume(false); setStep(init.step); window.scrollTo({ top: 0 }); }}
+        onDismissResume={() => { setShowResume(false); localStorage.removeItem(STORAGE_KEY); setAnswers(DEFAULT_ANSWERS); }}
+      />;
 
       const results = step === 5 ? calculateScores(answers) : null;
 
