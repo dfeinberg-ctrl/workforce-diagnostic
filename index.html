@@ -418,6 +418,124 @@
       },
     ];
 
+    // Financial models for ROI comparison
+    // annualCost(employees, frontlineCount) → { low, mid, high } AUD/year
+    // saving(cost) → { low, mid, high } estimated annual saving from cost object
+    const INTERVENTION_ROI = {
+      'earned-wage-access': {
+        annualCost: (n, fl) => ({ low: fl * 60, mid: fl * 132, high: fl * 216 }),   // $5–$18/fl-emp/month
+        saving: (c) => ({
+          low:  c.absence * 0.10 + c.turnover * 0.08 + c.disruption * 0.05 + c.productivity * 0.05,
+          mid:  c.absence * 0.19 + c.turnover * 0.15 + c.disruption * 0.08 + c.productivity * 0.08,
+          high: c.absence * 0.28 + c.turnover * 0.22 + c.disruption * 0.12 + c.productivity * 0.12,
+        }),
+        savingBasis: 'Reduced absence + lower turnover from pay-cycle stress relief',
+      },
+      'pay-frequency': {
+        annualCost: () => ({ low: 0, mid: 2500, high: 5000 }),                      // flat admin/system cost
+        saving: (c) => ({
+          low:  c.absence * 0.08 + c.turnover * 0.05 + c.disruption * 0.04,
+          mid:  c.absence * 0.14 + c.turnover * 0.08 + c.disruption * 0.06,
+          high: c.absence * 0.20 + c.turnover * 0.12 + c.disruption * 0.08,
+        }),
+        savingBasis: 'Absence reduction + lower pay-advance admin + reduced financial-stress turnover',
+      },
+      'financial-coaching': {
+        annualCost: (n) => ({ low: n * 200, mid: n * 500, high: n * 800 }),
+        saving: (c) => ({
+          low:  c.productivity * 0.08 + c.absence * 0.05 + c.turnover * 0.04,
+          mid:  c.productivity * 0.15 + c.absence * 0.10 + c.turnover * 0.07,
+          high: c.productivity * 0.22 + c.absence * 0.15 + c.turnover * 0.10,
+        }),
+        savingBasis: 'Presenteeism reduction + lower absence from financial resilience improvement',
+      },
+      'psychosocial-assessment': {
+        annualCost: () => ({ low: 5000, mid: 15000, high: 25000 }),
+        saving: (c) => ({
+          low:  c.productivity * 0.05 + c.absence * 0.05 + c.disruption * 0.03,
+          mid:  c.productivity * 0.10 + c.absence * 0.08 + c.disruption * 0.06,
+          high: c.productivity * 0.15 + c.absence * 0.12 + c.disruption * 0.10,
+        }),
+        savingBasis: 'WHS compliance risk reduction + early hazard identification savings',
+      },
+      'manager-training': {
+        annualCost: (n) => ({ low: Math.ceil(n/10) * 500, mid: Math.ceil(n/10) * 1200, high: Math.ceil(n/10) * 2000 }),
+        saving: (c) => ({
+          low:  c.absence * 0.06 + c.productivity * 0.06 + c.disruption * 0.04,
+          mid:  c.absence * 0.10 + c.productivity * 0.12 + c.disruption * 0.06,
+          high: c.absence * 0.15 + c.productivity * 0.18 + c.disruption * 0.10,
+        }),
+        savingBasis: 'Earlier intervention reduces absence escalation + productivity drag',
+      },
+      'eap-relaunch': {
+        annualCost: () => ({ low: 0, mid: 2000, high: 5000 }),                      // relaunch comms/training cost
+        saving: (c) => ({
+          low:  c.productivity * 0.05 + c.absence * 0.05,
+          mid:  c.productivity * 0.10 + c.absence * 0.08,
+          high: c.productivity * 0.15 + c.absence * 0.12,
+        }),
+        savingBasis: 'Increased EAP utilisation reduces presenteeism and unplanned absence',
+      },
+      'frontline-support-package': {
+        annualCost: (n, fl) => ({ low: fl * 300, mid: fl * 800, high: fl * 1500 }),
+        saving: (c) => ({
+          low:  c.turnover * 0.12 + c.absence * 0.08 + c.disruption * 0.06,
+          mid:  c.turnover * 0.20 + c.absence * 0.12 + c.disruption * 0.09,
+          high: c.turnover * 0.28 + c.absence * 0.16 + c.disruption * 0.12,
+        }),
+        savingBasis: 'Reduced frontline turnover + lower absence from improved EVP equity',
+      },
+      'evp-audit': {
+        annualCost: () => ({ low: 0, mid: 5000, high: 10000 }),
+        saving: (c) => ({
+          low:  c.turnover * 0.08 + c.disruption * 0.04,
+          mid:  c.turnover * 0.12 + c.disruption * 0.06,
+          high: c.turnover * 0.18 + c.disruption * 0.08,
+        }),
+        savingBasis: 'Targeted EVP gap closure reduces EVP-driven turnover',
+      },
+      'absence-management': {
+        annualCost: () => ({ low: 2000, mid: 8000, high: 15000 }),
+        saving: (c) => ({
+          low:  c.absence * 0.15 + c.disruption * 0.10,
+          mid:  c.absence * 0.22 + c.disruption * 0.15,
+          high: c.absence * 0.30 + c.disruption * 0.20,
+        }),
+        savingBasis: 'Direct absence reduction + overtime and disruption cost savings',
+      },
+      'rostering-stability': {
+        annualCost: () => ({ low: 0, mid: 5000, high: 10000 }),
+        saving: (c) => ({
+          low:  c.disruption * 0.12 + c.absence * 0.08,
+          mid:  c.disruption * 0.20 + c.absence * 0.12,
+          high: c.disruption * 0.28 + c.absence * 0.16,
+        }),
+        savingBasis: 'Reduced last-minute roster gaps, overtime spend, and operational disruption',
+      },
+      'exit-analysis': {
+        annualCost: () => ({ low: 0, mid: 2500, high: 5000 }),
+        saving: (c) => ({
+          low:  c.turnover * 0.08,
+          mid:  c.turnover * 0.12,
+          high: c.turnover * 0.18,
+        }),
+        savingBasis: 'Targeted retention reduces avoidable turnover and replacement cost',
+      },
+    };
+
+    function calcInterventionROI(item, answers, results) {
+      const model = INTERVENTION_ROI[item.id];
+      if (!model) return null;
+      const n = Math.max(answers.profile.employeeCount, 1);
+      const fl = Math.round(n * answers.profile.frontlinePercentage / 100);
+      const cost = model.annualCost(n, fl);
+      const saving = model.saving(results.cost);
+      // mid-point figures for primary display
+      const roiMid = cost.mid > 0 ? saving.mid / cost.mid : null;
+      const paybackMonths = cost.mid > 0 && saving.mid > 0 ? Math.round((cost.mid / saving.mid) * 12) : null;
+      return { cost, saving, roiMid, paybackMonths, savingBasis: model.savingBasis };
+    }
+
     function getActionPlan(answers, results) {
       const applicable = INTERVENTIONS.filter(i => i.condition(answers, results));
       const scored = applicable.map(i => ({ ...i, score: i.priority(answers, results) }));
@@ -2272,6 +2390,179 @@
       );
     }
 
+    // ─── BENEFITS ROI COMPARISON ────────────────────────────────────────────
+
+    const SORT_OPTIONS = [
+      { id: 'roi', label: 'ROI multiple' },
+      { id: 'saving', label: 'Est. saving' },
+      { id: 'cost', label: 'Cost (low → high)' },
+      { id: 'payback', label: 'Payback speed' },
+    ];
+
+    function BenefitsROIComparison({ answers, results }) {
+      const [assumption, setAssumption] = useState('mid');  // low | mid | high
+      const [sortBy, setSortBy] = useState('roi');
+      const [expanded, setExpanded] = useState(false);
+
+      // Build ROI data for all interventions that have a model
+      const allWithROI = INTERVENTIONS
+        .filter(i => INTERVENTION_ROI[i.id])
+        .map(i => {
+          const roi = calcInterventionROI(i, answers, results);
+          const applicable = i.condition(answers, results);
+          return { ...i, roi, applicable };
+        })
+        .filter(i => i.roi !== null);
+
+      // Sort
+      const sorted = [...allWithROI].sort((a, b) => {
+        const ar = a.roi, br = b.roi;
+        if (sortBy === 'roi') return (br.roiMid ?? 0) - (ar.roiMid ?? 0);
+        if (sortBy === 'saving') return br.roi.saving[assumption] - ar.roi.saving[assumption];
+        if (sortBy === 'cost') return ar.roi.cost[assumption] - br.roi.cost[assumption];
+        if (sortBy === 'payback') {
+          const ap = ar.paybackMonths ?? 999, bp = br.paybackMonths ?? 999;
+          return ap - bp;
+        }
+        return 0;
+      });
+
+      const maxSaving = Math.max(...sorted.map(i => i.roi.saving[assumption]), 1);
+      const maxROI = Math.max(...sorted.map(i => i.roi.roiMid ?? 0), 1);
+
+      return (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Benefits ROI Comparison</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Estimated cost vs. saving for each intervention — calculated from your workforce size and cost exposure</p>
+            </div>
+            <button onClick={() => setExpanded(e => !e)}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 no-print">
+              {expanded ? 'Hide' : 'Show all interventions'}
+              <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={12}/>
+            </button>
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap items-center gap-3 mb-4 mt-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500">Cost assumption:</span>
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                {[{ id: 'low', label: 'Low' }, { id: 'mid', label: 'Mid' }, { id: 'high', label: 'High' }].map(opt => (
+                  <button key={opt.id} onClick={() => setAssumption(opt.id)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-all ${assumption === opt.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500">Sort by:</span>
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                {SORT_OPTIONS.map(opt => (
+                  <button key={opt.id} onClick={() => setSortBy(opt.id)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-all ${sortBy === opt.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden print-card">
+            {/* Header */}
+            <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <div className="col-span-4">Intervention</div>
+              <div className="col-span-2 text-right">Annual cost</div>
+              <div className="col-span-2 text-right">Est. saving</div>
+              <div className="col-span-2 text-right">ROI</div>
+              <div className="col-span-2 text-right">Payback</div>
+            </div>
+
+            {/* Rows */}
+            {(expanded ? sorted : sorted.filter(i => i.applicable)).map((item, idx) => {
+              const r = item.roi;
+              const cost = r.cost[assumption];
+              const saving = r.saving[assumption];
+              const roi = cost > 0 ? saving / cost : null;
+              const payback = cost > 0 && saving > 0 ? Math.round((cost / saving) * 12) : null;
+              const savingBarPct = Math.min((saving / maxSaving) * 100, 100);
+              const isPositive = roi !== null && roi >= 1;
+              const isApplicable = item.applicable;
+
+              return (
+                <div key={item.id} className={`border-b border-slate-50 last:border-0 transition-colors ${!isApplicable ? 'opacity-40' : ''}`}>
+                  <div className="grid grid-cols-12 gap-2 px-4 py-3 items-center">
+                    {/* Name */}
+                    <div className="col-span-4">
+                      <div className="flex items-start gap-2">
+                        <span className="text-base flex-shrink-0 mt-0.5">{item.icon}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 leading-snug">{item.title}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">{item.category}</p>
+                          {!isApplicable && <p className="text-[10px] text-slate-300 mt-0.5 italic">Not triggered by your profile</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Annual cost */}
+                    <div className="col-span-2 text-right">
+                      <p className="text-xs font-bold text-slate-800">{cost === 0 ? 'Minimal' : formatAUDShort(cost)}</p>
+                      {r.cost.low !== r.cost.high && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">{r.cost.low === 0 ? '$0' : formatAUDShort(r.cost.low)} – {formatAUDShort(r.cost.high)}</p>
+                      )}
+                    </div>
+
+                    {/* Est. saving */}
+                    <div className="col-span-2 text-right">
+                      <p className="text-xs font-bold" style={{ color: isPositive ? '#15803d' : '#64748b' }}>{formatAUDShort(saving)}</p>
+                      <div className="flex justify-end mt-1">
+                        <div className="h-1 bg-slate-100 rounded-full w-16 overflow-hidden">
+                          <div className="h-1 rounded-full" style={{ width: `${savingBarPct}%`, backgroundColor: isPositive ? '#16a34a' : '#94a3b8' }}/>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ROI */}
+                    <div className="col-span-2 text-right">
+                      {roi !== null ? (
+                        <span className="inline-block text-xs font-extrabold px-2 py-0.5 rounded-lg"
+                          style={{ backgroundColor: isPositive ? '#dcfce7' : '#f1f5f9', color: isPositive ? '#15803d' : '#64748b' }}>
+                          {roi >= 10 ? `${roi.toFixed(0)}×` : `${roi.toFixed(1)}×`}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </div>
+
+                    {/* Payback */}
+                    <div className="col-span-2 text-right">
+                      <p className="text-xs font-semibold text-slate-700">
+                        {payback === null ? '—' : payback < 1 ? '< 1 mo' : payback === 1 ? '1 month' : `${payback} mo`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Saving basis — shown on hover / expand */}
+                  <div className="px-4 pb-2.5 -mt-1">
+                    <p className="text-[10px] text-slate-400 ml-7 italic leading-snug">{r.savingBasis}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+            Cost assumptions reflect published market ranges — Low = minimal implementation, Mid = typical, High = full-service engagement.
+            Savings are estimated from your cost exposure data using evidence-based impact ranges. All figures are directional.
+            <span className="text-slate-300"> · Greyed rows = not triggered by your current profile but shown for reference when "Show all interventions" is enabled.</span>
+          </p>
+        </div>
+      );
+    }
+
     // ─── ACTION PLAN PAGE ───────────────────────────────────────────────────
 
     const EFFORT_STYLE = {
@@ -2412,6 +2703,9 @@
           <div className="mt-6 bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-xs text-slate-500 leading-relaxed">
             <strong className="text-slate-700">About this plan:</strong> Interventions are ranked by relevance to your specific risk signals and workforce profile — not by general popularity. Priority scores are computed from your inputs; they are directional, not prescriptive. Cost and time estimates are indicative and will vary by organisation size, existing systems, and implementation approach.
           </div>
+
+          {/* Benefits ROI Comparison */}
+          <BenefitsROIComparison answers={answers} results={results}/>
         </div>
       );
     }
