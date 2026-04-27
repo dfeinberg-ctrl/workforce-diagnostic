@@ -1946,6 +1946,41 @@
                   <p className="text-xs text-slate-500 leading-tight mt-0.5">{frontlineLabel}</p>
                 </div>
               </div>
+              {/* Headcount breakdown — only shown once employee count is entered */}
+              {profile.employeeCount > 0 && (
+                <div className="flex items-center gap-3 mt-3">
+                  {(() => {
+                    const fl = Math.round(profile.employeeCount * profile.frontlinePercentage / 100);
+                    const office = profile.employeeCount - fl;
+                    return (
+                      <>
+                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                          <span className="text-sm">👷</span>
+                          <div>
+                            <p className="text-sm font-bold text-amber-900">{fl.toLocaleString()}</p>
+                            <p className="text-[10px] text-amber-600 font-medium leading-tight">frontline / shift</p>
+                          </div>
+                        </div>
+                        <span className="text-slate-300 text-sm">+</span>
+                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                          <span className="text-sm">💼</span>
+                          <div>
+                            <p className="text-sm font-bold text-blue-900">{office.toLocaleString()}</p>
+                            <p className="text-[10px] text-blue-600 font-medium leading-tight">office / salaried</p>
+                          </div>
+                        </div>
+                        <span className="text-slate-300 text-sm">=</span>
+                        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">{profile.employeeCount.toLocaleString()}</p>
+                            <p className="text-[10px] text-slate-500 font-medium leading-tight">total</p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             <div>
